@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if the requesting user is the admin
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper: check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ─── USERS COLLECTION ───
+    match /users/{userId} {
+      // Users can read their own doc
+      // Admin can read all user docs (for AdminScreen)
+      allow read: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin());
+
+      // Users can create their own doc on registration
+      allow create: if isSignedIn()
+        && request.auth.uid == userId;
+
+      // Users can update their own doc (profile, body metrics)
+      // Admin can update any user doc (freeze/close accounts)
+      allow update: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin());
+
+      // No one can delete user docs from client
+      allow delete: if false;
+    }
+
+    // ─── CLIENTS COLLECTION ───
+    match /clients/{clientId} {
+      // Trainers can only read clients they own
+      // Admin can read any client
+      allow read: if isSignedIn()
+        && (resource.data.trainerId == request.auth.uid || isAdmin());
+
+      // Trainers can create clients assigned to themselves
+      allow create: if isSignedIn()
+        && request.resource.data.trainerId == request.auth.uid;
+
+      // Trainers can update/delete only their own clients
+      // Admin can update/delete any client
+      allow update, delete: if isSignedIn()
+        && (resource.data.trainerId == request.auth.uid || isAdmin());
+    }
+
+    // ─── SESSIONS COLLECTION ───
+    match /sessions/{sessionId} {
+      // Trainers can read sessions they created OR sessions where they are the client
+      // Admin can read any session
+      allow read: if isSignedIn()
+        && (resource.data.trainerId == request.auth.uid
+            || resource.data.clientId == request.auth.uid
+            || isAdmin());
+
+      // Trainers can create sessions assigned to themselves
+      allow create: if isSignedIn()
+        && request.resource.data.trainerId == request.auth.uid;
+
+      // Trainers can update/delete sessions they created
+      // Users can delete their own sessions (clientId == uid)
+      // Admin can update/delete any session
+      allow update, delete: if isSignedIn()
+        && (resource.data.trainerId == request.auth.uid
+            || resource.data.clientId == request.auth.uid
+            || isAdmin());
+    }
+
+    // Deny all other collections by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

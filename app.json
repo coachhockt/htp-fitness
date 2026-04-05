@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "HTP Fitness",
+    "slug": "htp-fitness",
+    "scheme": "htp-fitness",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.htp.fitness"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D0D0D"
+      },
+      "package": "com.htp.fitness"
+    },
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      "expo-web-browser"
+    ]
+  }
+}
