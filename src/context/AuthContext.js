@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db, app } from '../../firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { initializeAuth, signInWithEmailAndPassword, signOut, getReactNativePersistence } from 'firebase/auth';
+import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const AuthContext = createContext(null);
 const API_KEY = 'AIzaSyBZPGeWgw6lXE6rXrvLBTvzq7SCIhWz0GE';
@@ -11,7 +11,11 @@ const ADMIN_EMAIL = 'coach.hockt@gmail.com';
 let _auth = null;
 function getAuth() {
   if (!_auth) {
+    console.log('[Auth] Initializing Firebase Auth...');
     _auth = initializeAuth(app, { persistence: inMemoryPersistence });
+    console.log('[Auth] Firebase Auth initialized:', _auth.app.name);
+  } else {
+    console.log('[Auth] Reusing existing Firebase Auth instance');
   }
   return _auth;
 }
@@ -94,6 +98,10 @@ export function AuthProvider({ children }) {
       throw new Error(data.error.message.replace(/_/g, ' '));
     }
 
+    // Sign into Firebase Auth SDK so Firestore rules can verify identity
+    const loginAuthResult = await signInWithEmailAndPassword(getAuth(), email, password);
+    console.log('[Auth] signInWithEmailAndPassword result (login):', JSON.stringify(loginAuthResult, null, 2));
+
     const userDocRef = doc(db, 'users', data.localId);
     const userDocSnap = await getDoc(userDocRef);
     if (userDocSnap.exists()) {
@@ -113,9 +121,6 @@ export function AuthProvider({ children }) {
         lockUntil: null,
       });
     }
-
-    // Sign into Firebase Auth SDK so Firestore rules can verify identity
-    await signInWithEmailAndPassword(getAuth(), email, password);
 
     const userDocFresh = await getDoc(userDocRef);
     const userData = userDocFresh.data() || {};
@@ -141,19 +146,29 @@ export function AuthProvider({ children }) {
     );
     const data = await res.json();
     if (data.error) throw new Error(data.error.message.replace(/_/g, ' '));
+    console.log('[Auth] signUp response:', JSON.stringify(data, null, 2));
+
+    // Sign into Firebase Auth SDK so Firestore rules can verify identity
+    const registerAuthResult = await signInWithEmailAndPassword(getAuth(), email, password);
+    console.log('[Auth] signInWithEmailAndPassword result (register):', JSON.stringify(registerAuthResult, null, 2));
 
     const role = data.email === ADMIN_EMAIL ? 'admin' : 'trainer';
-    await setDoc(doc(db, 'users', data.localId), {
+    const userDoc = {
       email: data.email,
       role,
       status: 'active',
       createdAt: new Date().toISOString(),
       failedAttempts: 0,
       lockUntil: null,
-    });
-
-    // Sign into Firebase Auth SDK so Firestore rules can verify identity
-    await signInWithEmailAndPassword(getAuth(), email, password);
+    };
+    console.log('[Auth] Writing user doc to Firestore:', JSON.stringify(userDoc, null, 2));
+    try {
+      await setDoc(doc(db, 'users', data.localId), userDoc);
+      console.log('[Auth] User doc written successfully for uid:', data.localId);
+    } catch (e) {
+      console.error('[Auth] Failed to write user doc:', e);
+      throw e;
+    }
 
     // Send welcome/verification email (fire-and-forget)
     try {
