@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, Image, ActivityIndicator,
-  Modal, Pressable, ScrollView, Keyboard, TouchableWithoutFeedback,
+  Modal, Pressable, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -100,7 +100,6 @@ export default function AuthScreen() {
   }
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -109,6 +108,7 @@ export default function AuthScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
       <Image
@@ -293,7 +293,6 @@ export default function AuthScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
-    </TouchableWithoutFeedback>
   );
 }
 
