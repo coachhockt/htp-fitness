@@ -20,7 +20,7 @@ export default function AuthScreen() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const { login, register } = useAuth();
-  const API_KEY = 'AIzaSyBZPGeWgw6lXE6rXrvLBTvzq7SCIhWz0GE';
+  const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
 
   const EMAIL_DOMAINS = [
     { prefix: 'g', domain: '@gmail.com' },

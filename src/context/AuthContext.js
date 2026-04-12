@@ -5,8 +5,8 @@ import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } fro
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const AuthContext = createContext(null);
-const API_KEY = 'AIzaSyBZPGeWgw6lXE6rXrvLBTvzq7SCIhWz0GE';
-const ADMIN_EMAIL = 'coach.hockt@gmail.com';
+const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL;
 
 let _auth = null;
 function getAuth() {
