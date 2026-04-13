@@ -40,6 +40,10 @@ function SetRow({ set, index, onUpdate, onDelete }) {
         value={set.weight}
         onChangeText={v => {
           const num = parseFloat(v);
+          if (v !== '' && !isNaN(num) && num < 0) {
+            Alert.alert('Invalid', 'Weight cannot be negative.');
+            return;
+          }
           if (v !== '' && !isNaN(num) && num > 1500) {
             Alert.alert('Wow!', 'You are strong! Contact admin if you can really lift 1500!');
             return;
@@ -57,6 +61,10 @@ function SetRow({ set, index, onUpdate, onDelete }) {
         value={set.reps}
         onChangeText={v => {
           const num = parseInt(v);
+          if (v !== '' && !isNaN(num) && num < 0) {
+            Alert.alert('Invalid', 'Reps cannot be negative.');
+            return;
+          }
           if (v !== '' && !isNaN(num) && num > 200) {
             Alert.alert('Limit Reached', 'Maximum 200 reps per set.');
             return;

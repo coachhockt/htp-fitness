@@ -10,6 +10,7 @@ import {
   doc, deleteDoc, getDoc, updateDoc,
 } from 'firebase/firestore';
 import { COLORS, FONTS } from '../theme';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PAGE_SIZE = 10;
 
@@ -18,8 +19,10 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [client, setClient] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [page, setPage] = useState(0);
-  const [searchFrom, setSearchFrom] = useState('');
-  const [searchTo, setSearchTo] = useState('');
+  const [fromDate, setFromDate] = useState(null);
+  const [toDate, setToDate] = useState(null);
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
   const [filtering, setFiltering] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [editFirst, setEditFirst] = useState('');
@@ -76,26 +79,16 @@ export default function ClientDetailScreen({ route, navigation }) {
     );
   }
 
-  function parseDate(str) {
-    const parts = str.split('/');
-    if (parts.length !== 3) return null;
-    const [m, d, y] = parts.map(Number);
-    if (!m || !d || !y) return null;
-    return new Date(y, m - 1, d);
-  }
-
   function applyDateFilter() {
-    const from = parseDate(searchFrom);
-    const to = parseDate(searchTo);
-    if (!from || !to) {
-      Alert.alert('Invalid Date', 'Use MM/DD/YYYY format for both dates.');
+    if (!fromDate || !toDate) {
+      Alert.alert('Select Dates', 'Please select both a start and end date.');
       return;
     }
-    if (to < from) {
+    if (toDate < fromDate) {
       Alert.alert('Invalid Range', 'End date must be after start date.');
       return;
     }
-    const diffDays = (to - from) / (1000 * 60 * 60 * 24);
+    const diffDays = (toDate - fromDate) / (1000 * 60 * 60 * 24);
     if (diffDays > 14) {
       Alert.alert('Range Too Large', 'Maximum search range is 2 weeks.');
       return;
@@ -105,20 +98,24 @@ export default function ClientDetailScreen({ route, navigation }) {
   }
 
   function clearFilter() {
-    setSearchFrom('');
-    setSearchTo('');
+    setFromDate(null);
+    setToDate(null);
     setFiltering(false);
     setPage(0);
+  }
+
+  function formatPickedDate(date) {
+    if (!date) return 'Select date';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   const filteredSessions = filtering
     ? sessions.filter(s => {
         if (!s.date) return false;
         const d = s.date.toDate ? s.date.toDate() : new Date(s.date);
-        const from = parseDate(searchFrom);
-        const to = parseDate(searchTo);
+        const to = new Date(toDate);
         to.setHours(23, 59, 59, 999);
-        return d >= from && d <= to;
+        return d >= fromDate && d <= to;
       })
     : sessions;
 
@@ -241,25 +238,17 @@ export default function ClientDetailScreen({ route, navigation }) {
 
             {/* Date Range Search */}
             <View style={styles.dateSearchRow}>
-              <TextInput
-                style={styles.dateInput}
-                placeholder="M/D/YYYY"
-                placeholderTextColor={COLORS.textMuted}
-                value={searchFrom}
-                onChangeText={setSearchFrom}
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-              />
+              <TouchableOpacity style={styles.dateInput} onPress={() => setShowFromPicker(true)}>
+                <Text style={fromDate ? styles.dateInputText : styles.dateInputPlaceholder}>
+                  {formatPickedDate(fromDate)}
+                </Text>
+              </TouchableOpacity>
               <Text style={styles.dateToText}>to</Text>
-              <TextInput
-                style={styles.dateInput}
-                placeholder="M/D/YYYY"
-                placeholderTextColor={COLORS.textMuted}
-                value={searchTo}
-                onChangeText={setSearchTo}
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-              />
+              <TouchableOpacity style={styles.dateInput} onPress={() => setShowToPicker(true)}>
+                <Text style={toDate ? styles.dateInputText : styles.dateInputPlaceholder}>
+                  {formatPickedDate(toDate)}
+                </Text>
+              </TouchableOpacity>
             </View>
             <View style={styles.dateSearchActions}>
               <TouchableOpacity style={styles.searchBtn} onPress={applyDateFilter}>
@@ -273,8 +262,76 @@ export default function ClientDetailScreen({ route, navigation }) {
             </View>
             {filtering && (
               <Text style={styles.filterInfo}>
-                Showing {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''} from {searchFrom} to {searchTo}
+                Showing {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''} from {formatPickedDate(fromDate)} to {formatPickedDate(toDate)}
               </Text>
+            )}
+            {showFromPicker && (
+              Platform.OS === 'ios' ? (
+                <Modal transparent animationType="fade">
+                  <Pressable style={styles.pickerOverlay} onPress={() => setShowFromPicker(false)}>
+                    <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
+                      <DateTimePicker
+                        maximumDate={new Date()}
+                        value={fromDate || new Date()}
+                        mode="date"
+                        display="inline"
+                        onChange={(event, date) => {
+                          if (date) setFromDate(date);
+                        }}
+                        themeVariant="dark"
+                      />
+                      <TouchableOpacity style={styles.pickerDone} onPress={() => setShowFromPicker(false)}>
+                        <Text style={styles.pickerDoneText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Pressable>
+                </Modal>
+              ) : (
+                <DateTimePicker
+                        maximumDate={new Date()}
+                  value={fromDate || new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={(event, date) => {
+                    setShowFromPicker(false);
+                    if (date) setFromDate(date);
+                  }}
+                />
+              )
+            )}
+            {showToPicker && (
+              Platform.OS === 'ios' ? (
+                <Modal transparent animationType="fade">
+                  <Pressable style={styles.pickerOverlay} onPress={() => setShowToPicker(false)}>
+                    <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
+                      <DateTimePicker
+                        maximumDate={new Date()}
+                        value={toDate || new Date()}
+                        mode="date"
+                        display="inline"
+                        onChange={(event, date) => {
+                          if (date) setToDate(date);
+                        }}
+                        themeVariant="dark"
+                      />
+                      <TouchableOpacity style={styles.pickerDone} onPress={() => setShowToPicker(false)}>
+                        <Text style={styles.pickerDoneText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </Pressable>
+                </Modal>
+              ) : (
+                <DateTimePicker
+                        maximumDate={new Date()}
+                  value={toDate || new Date()}
+                  mode="date"
+                  display="default"
+                  onChange={(event, date) => {
+                    setShowToPicker(false);
+                    if (date) setToDate(date);
+                  }}
+                />
+              )
             )}
           </View>
         }
@@ -283,7 +340,6 @@ export default function ClientDetailScreen({ route, navigation }) {
           <TouchableOpacity
             style={styles.card}
             onPress={() => navigation.navigate('SessionDetail', { sessionId: item.id })}
-            onLongPress={() => confirmDelete(item)}
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.date}>{formatDate(item.date)}</Text>
@@ -293,7 +349,13 @@ export default function ClientDetailScreen({ route, navigation }) {
                 {totalSets(item)} set{totalSets(item) !== 1 ? 's' : ''}
               </Text>
             </View>
-            <Text style={styles.arrow}>›</Text>
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={() => confirmDelete(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.deleteBtnText}>✕</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
         ListFooterComponent={
@@ -518,7 +580,17 @@ const styles = StyleSheet.create({
   },
   date: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
   meta: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontFamily: FONTS.regular },
-  arrow: { color: COLORS.textMuted, fontSize: 24 },
+  deleteBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 10,
+    padding: 4,
+  },
+  deleteBtnText: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontFamily: FONTS.semiBold,
+  },
   empty: {
     color: COLORS.textMuted,
     textAlign: 'center',
@@ -587,6 +659,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.regular,
     marginBottom: 12,
   },
+  dateInputText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.regular },
+  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
+  pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  pickerContainer: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: '90%' },
+  pickerDone: { alignItems: 'center', padding: 12, marginTop: 8 },
+  pickerDoneText: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
 
   // Pagination
   pagination: {

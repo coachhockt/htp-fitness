@@ -10,9 +10,11 @@ import {
   Montserrat_800ExtraBold,
   Montserrat_900Black,
 } from '@expo-google-fonts/montserrat';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/components/SplashScreen';
+import OfflineBanner from './src/components/OfflineBanner';
 
 class ErrorBoundary extends React.Component {
   state = { error: null };
@@ -51,18 +53,21 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <StatusBar style="light" />
-        {splashDone ? (
-          <AppNavigator />
-        ) : (
-          <View style={styles.loadingContainer}>
-            <SplashScreen onFinish={() => setSplashDone(true)} />
-          </View>
-        )}
-      </AuthProvider>
-    </ErrorBoundary>
+    <SafeAreaProvider>
+      <OfflineBanner />
+      <ErrorBoundary>
+        <AuthProvider>
+          <StatusBar style="light" />
+          {splashDone ? (
+            <AppNavigator />
+          ) : (
+            <View style={styles.loadingContainer}>
+              <SplashScreen onFinish={() => setSplashDone(true)} />
+            </View>
+          )}
+        </AuthProvider>
+      </ErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 

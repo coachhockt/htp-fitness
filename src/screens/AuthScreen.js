@@ -59,6 +59,10 @@ export default function AuthScreen() {
       Alert.alert('Error', 'Email is required');
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      Alert.alert('Error', 'Please enter a valid email address.');
+      return;
+    }
     if (!password) {
       Alert.alert('Error', 'Password is required');
       return;

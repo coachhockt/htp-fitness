@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Dimensions, TextInput,
-  Modal, StatusBar, useWindowDimensions, BackHandler,
+  Modal, StatusBar, useWindowDimensions, BackHandler, ActivityIndicator,
 } from 'react-native';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -28,6 +28,7 @@ export default function ProgressScreen({ route, navigation }) {
   const [fullscreenChart, setFullscreenChart] = useState(null);
   const [bodyHistory, setBodyHistory] = useState([]);
   const [mode, setMode] = useState('exercise'); // 'exercise', 'bodyWeight', 'bodyFat'
+  const [loading, setLoading] = useState(true);
   const { width: winWidth, height: winHeight } = useWindowDimensions();
 
   useEffect(() => {
@@ -79,8 +80,6 @@ export default function ProgressScreen({ route, navigation }) {
         console.warn('Progress load error:', e);
       }
     }
-    load();
-
     // Load body history from client or user doc
     async function loadBody() {
       try {
@@ -95,7 +94,7 @@ export default function ProgressScreen({ route, navigation }) {
         }
       } catch (e) {}
     }
-    loadBody();
+    Promise.all([load(), loadBody()]).finally(() => setLoading(false));
   }, [clientId]);
 
   const filteredNames = exerciseNames.filter(name =>
@@ -203,6 +202,12 @@ export default function ProgressScreen({ route, navigation }) {
       propsForBackgroundLines: { stroke: COLORS.border },
     };
   }
+
+  if (loading) return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+      <ActivityIndicator size="large" color={COLORS.accent} />
+    </View>
+  );
 
   return (
     <ScrollView

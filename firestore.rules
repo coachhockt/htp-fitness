@@ -22,13 +22,26 @@ service cloud.firestore {
         && (request.auth.uid == userId || isAdmin());
 
       // Users can create their own doc on registration
+      // Role must be 'user' unless the token email matches the admin email
       allow create: if isSignedIn()
-        && request.auth.uid == userId;
+        && request.auth.uid == userId
+        && (
+          request.resource.data.role == 'user'
+          || (request.resource.data.role == 'admin'
+              && request.auth.token.email == 'coach.hockt@gmail.com')
+        );
 
       // Users can update their own doc (profile, body metrics)
+      // But cannot change their own role, email, or status
       // Admin can update any user doc (freeze/close accounts)
       allow update: if isSignedIn()
-        && (request.auth.uid == userId || isAdmin());
+        && (
+          (request.auth.uid == userId
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.email == resource.data.email
+            && request.resource.data.status == resource.data.status)
+          || isAdmin()
+        );
 
       // No one can delete user docs from client
       allow delete: if false;

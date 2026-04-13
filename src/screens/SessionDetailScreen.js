@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  TextInput, Alert, KeyboardAvoidingView, Platform,
+  TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator,
+  Modal, Pressable,
 } from 'react-native';
 import { db } from '../../firebase';
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { COLORS, FONTS } from '../theme';
 import { estimate1RM, compute1RMs } from '../utils';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SessionDetailScreen({ route, navigation }) {
   const { sessionId } = route.params;
   const [session, setSession] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [editDate, setEditDate] = useState('');
+  const [editDate, setEditDate] = useState(null);
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [editExercises, setEditExercises] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -22,7 +25,11 @@ export default function SessionDetailScreen({ route, navigation }) {
     });
   }, [sessionId]);
 
-  if (!session) return null;
+  if (!session) return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
+      <ActivityIndicator size="large" color={COLORS.accent} />
+    </View>
+  );
 
   function toDate(ts) {
     if (!ts) return new Date();
@@ -58,7 +65,7 @@ export default function SessionDetailScreen({ route, navigation }) {
   }
 
   function startEditing() {
-    setEditDate(formatDateInput(session.date));
+    setEditDate(toDate(session.date));
     setEditExercises(
       session.exercises.map(ex => ({
         name: ex.name,
@@ -113,16 +120,11 @@ export default function SessionDetailScreen({ route, navigation }) {
   }
 
   async function saveEdits() {
-    // Parse date
-    const parts = editDate.split('/');
-    let parsedDate;
-    if (parts.length === 3) {
-      parsedDate = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
-    }
-    if (!parsedDate || isNaN(parsedDate.getTime())) {
-      Alert.alert('Invalid date', 'Use MM/DD/YYYY format.');
+    if (!editDate || isNaN(editDate.getTime())) {
+      Alert.alert('Invalid date', 'Please select a valid date.');
       return;
     }
+    const parsedDate = editDate;
 
     const cleaned = editExercises
       .filter(ex => ex.name.trim())
@@ -241,19 +243,50 @@ export default function SessionDetailScreen({ route, navigation }) {
         contentContainerStyle={{ paddingBottom: 300 }}
       >
         <View style={styles.dateRow}>
-          <Text style={styles.editLabel}>DATE (MM/DD/YYYY)</Text>
+          <Text style={styles.editLabel}>DATE</Text>
           <TouchableOpacity onPress={cancelEditing}>
             <Text style={styles.cancelBtn}>Cancel</Text>
           </TouchableOpacity>
         </View>
-        <TextInput
-          style={styles.dateInput}
-          value={editDate}
-          onChangeText={setEditDate}
-          placeholder="MM/DD/YYYY"
-          placeholderTextColor={COLORS.textMuted}
-          keyboardType="numbers-and-punctuation"
-        />
+        <TouchableOpacity style={styles.dateInput} onPress={() => setShowEditDatePicker(true)}>
+          <Text style={editDate ? styles.dateInputText : styles.dateInputPlaceholder}>
+            {editDate ? editDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Select date'}
+          </Text>
+        </TouchableOpacity>
+        {showEditDatePicker && (
+          Platform.OS === 'ios' ? (
+            <Modal transparent animationType="fade">
+              <Pressable style={styles.pickerOverlay} onPress={() => setShowEditDatePicker(false)}>
+                <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
+                  <DateTimePicker
+                    maximumDate={new Date()}
+                    value={editDate || new Date()}
+                    mode="date"
+                    display="inline"
+                    onChange={(event, date) => {
+                      if (date) setEditDate(date);
+                    }}
+                    themeVariant="dark"
+                  />
+                  <TouchableOpacity style={styles.pickerDone} onPress={() => setShowEditDatePicker(false)}>
+                    <Text style={styles.pickerDoneText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </Modal>
+          ) : (
+            <DateTimePicker
+              maximumDate={new Date()}
+              value={editDate || new Date()}
+              mode="date"
+              display="default"
+              onChange={(event, date) => {
+                setShowEditDatePicker(false);
+                if (date) setEditDate(date);
+              }}
+            />
+          )
+        )}
 
         {editExercises.map((ex, exIdx) => (
           <View key={exIdx} style={styles.exerciseCard}>
@@ -284,7 +317,18 @@ export default function SessionDetailScreen({ route, navigation }) {
                 <TextInput
                   style={styles.editSetInput}
                   value={set.weight}
-                  onChangeText={v => updateSet(exIdx, setIdx, 'weight', v)}
+                  onChangeText={v => {
+                    const num = parseFloat(v);
+                    if (v !== '' && !isNaN(num) && num < 0) {
+                      Alert.alert('Invalid', 'Weight cannot be negative.');
+                      return;
+                    }
+                    if (v !== '' && !isNaN(num) && num > 1500) {
+                      Alert.alert('Wow!', 'You are strong! Contact admin if you can really lift 1500!');
+                      return;
+                    }
+                    updateSet(exIdx, setIdx, 'weight', v);
+                  }}
                   placeholder="lbs"
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="decimal-pad"
@@ -294,7 +338,18 @@ export default function SessionDetailScreen({ route, navigation }) {
                 <TextInput
                   style={styles.editSetInput}
                   value={set.reps}
-                  onChangeText={v => updateSet(exIdx, setIdx, 'reps', v)}
+                  onChangeText={v => {
+                    const num = parseInt(v);
+                    if (v !== '' && !isNaN(num) && num < 0) {
+                      Alert.alert('Invalid', 'Reps cannot be negative.');
+                      return;
+                    }
+                    if (v !== '' && !isNaN(num) && num > 200) {
+                      Alert.alert('Limit Reached', 'Maximum 200 reps per set.');
+                      return;
+                    }
+                    updateSet(exIdx, setIdx, 'reps', v);
+                  }}
                   placeholder="reps"
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="number-pad"
@@ -336,9 +391,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  date: { color: COLORS.text, fontSize: 17, fontWeight: '700', fontFamily: FONTS.bold },
-  editBtn: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
-  cancelBtn: { color: COLORS.danger, fontSize: 15, fontWeight: '600', fontFamily: FONTS.semiBold },
+  date: { color: COLORS.text, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
+  editBtn: { color: COLORS.accent, fontSize: 13, fontWeight: '700', fontFamily: FONTS.bold },
+  cancelBtn: { color: COLORS.danger, fontSize: 13, fontWeight: '600', fontFamily: FONTS.semiBold },
   summaryRow: {
     flexDirection: 'row',
     backgroundColor: COLORS.card,
@@ -349,7 +404,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   stat: { flex: 1, alignItems: 'center' },
-  statVal: { color: COLORS.accent, fontSize: 18, fontWeight: '800', fontFamily: FONTS.extraBold },
+  statVal: { color: COLORS.accent, fontSize: 16, fontWeight: '800', fontFamily: FONTS.extraBold },
   statLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '600', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: FONTS.semiBold },
   exerciseCard: {
     backgroundColor: COLORS.card,
@@ -359,15 +414,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  exName: { color: COLORS.accent, fontWeight: '700', fontSize: 17, marginBottom: 14, fontFamily: FONTS.bold },
+  exName: { color: COLORS.accent, fontWeight: '700', fontSize: 15, marginBottom: 14, fontFamily: FONTS.bold },
   tableHeader: { flexDirection: 'row', marginBottom: 8 },
   th: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', fontFamily: FONTS.bold },
   tableRow: { flexDirection: 'row', paddingVertical: 8, borderTopWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
-  td: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular },
+  td: { color: COLORS.text, fontSize: 16, fontFamily: FONTS.regular },
   tdMuted: { color: COLORS.textMuted },
   exFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: COLORS.border },
-  exTotal: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
-  exMax: { color: COLORS.accent, fontSize: 13, fontWeight: '600', fontFamily: FONTS.semiBold },
+  exTotal: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.regular },
+  exMax: { color: COLORS.accent, fontSize: 12, fontWeight: '600', fontFamily: FONTS.semiBold },
   e1rmRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -377,8 +432,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
   },
-  e1rmLabel: { color: COLORS.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: FONTS.bold },
-  e1rmVal: { color: '#D4872A', fontSize: 16, fontWeight: '800', fontFamily: FONTS.extraBold },
+  e1rmLabel: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, fontFamily: FONTS.bold },
+  e1rmVal: { color: '#D4872A', fontSize: 14.5, fontWeight: '800', fontFamily: FONTS.extraBold },
 
   // Edit mode styles
   editLabel: { color: COLORS.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: FONTS.bold },
@@ -387,19 +442,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     color: COLORS.text,
-    fontSize: 16,
+    fontSize: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: 20,
     fontFamily: FONTS.regular,
   },
+  dateInputText: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.regular },
+  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular },
+  pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  pickerContainer: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: '90%' },
+  pickerDone: { alignItems: 'center', padding: 12, marginTop: 8 },
+  pickerDoneText: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
   editExHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-  editExName: { color: COLORS.accent, fontWeight: '700', fontSize: 17, flex: 1, padding: 0, fontFamily: FONTS.bold },
-  removeEx: { color: COLORS.danger, fontSize: 13, fontFamily: FONTS.regular },
+  editExName: { color: COLORS.accent, fontWeight: '700', fontSize: 15, flex: 1, padding: 0, fontFamily: FONTS.bold },
+  removeEx: { color: COLORS.danger, fontSize: 12, fontFamily: FONTS.regular },
   editColHeaders: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   editColHeader: { color: COLORS.textMuted, fontSize: 9, fontWeight: '700', letterSpacing: 1, textAlign: 'center', fontFamily: FONTS.bold },
   editSetRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  editSetNum: { color: COLORS.textMuted, width: 28, textAlign: 'center', fontSize: 13, fontFamily: FONTS.regular },
+  editSetNum: { color: COLORS.textMuted, width: 28, textAlign: 'center', fontSize: 12, fontFamily: FONTS.regular },
   editSetInput: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -408,16 +469,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     color: COLORS.text,
     textAlign: 'center',
-    fontSize: 16,
+    fontSize: 15,
     borderWidth: 1,
     borderColor: COLORS.border,
     fontFamily: FONTS.regular,
   },
-  editX: { color: COLORS.textMuted, marginHorizontal: 8, fontSize: 16 },
+  editX: { color: COLORS.textMuted, marginHorizontal: 8, fontSize: 14 },
   editDeleteSet: { width: 36, alignItems: 'center', paddingVertical: 4 },
-  editDeleteSetText: { color: COLORS.danger, fontSize: 14 },
+  editDeleteSetText: { color: COLORS.danger, fontSize: 12 },
   addSetBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 2 },
-  addSetText: { color: COLORS.accent, fontWeight: '600', fontSize: 14, fontFamily: FONTS.semiBold },
+  addSetText: { color: COLORS.accent, fontWeight: '600', fontSize: 13, fontFamily: FONTS.semiBold },
   addExBtn: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
@@ -427,12 +488,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.accent,
   },
-  addExBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 15, fontFamily: FONTS.bold },
+  addExBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 13, fontFamily: FONTS.bold },
   saveBtn: {
     backgroundColor: COLORS.accent,
     borderRadius: 14,
     padding: 18,
     alignItems: 'center',
   },
-  saveBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  saveBtnText: { color: '#000', fontWeight: '800', fontSize: 15, fontFamily: FONTS.extraBold },
 });

@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, Alert, ScrollView, Image,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
 
 export default function CreateProfileScreen() {
@@ -15,6 +16,7 @@ export default function CreateProfileScreen() {
   const [bodyWeight, setBodyWeight] = useState('');
   const [bodyFat, setBodyFat] = useState('');
   const [saving, setSaving] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const sexOptions = ['Male', 'Female'];
 
@@ -53,7 +55,7 @@ export default function CreateProfileScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: 60 + insets.top }]} keyboardShouldPersistTaps="handled">
         <Image
           source={require('../../assets/logo.png')}
           style={styles.logoImage}

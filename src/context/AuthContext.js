@@ -111,7 +111,7 @@ export function AuthProvider({ children }) {
       // Reset failed attempts on successful login
       await updateDoc(userDocRef, { failedAttempts: 0, lockUntil: null });
     } else {
-      const role = data.email === ADMIN_EMAIL ? 'admin' : 'trainer';
+      const role = data.email === ADMIN_EMAIL ? 'admin' : 'user';
       await setDoc(userDocRef, {
         email: data.email,
         role,
@@ -128,7 +128,7 @@ export function AuthProvider({ children }) {
     const u = {
       uid: data.localId,
       email: data.email,
-      role: userData.role || 'trainer',
+      role: userData.role || 'user',
       profile: userData.profile || null,
     };
     setUser(u);
@@ -152,7 +152,7 @@ export function AuthProvider({ children }) {
     const registerAuthResult = await signInWithEmailAndPassword(getAuth(), email, password);
     console.log('[Auth] signInWithEmailAndPassword result (register):', JSON.stringify(registerAuthResult, null, 2));
 
-    const role = data.email === ADMIN_EMAIL ? 'admin' : 'trainer';
+    const role = data.email === ADMIN_EMAIL ? 'admin' : 'user';
     const userDoc = {
       email: data.email,
       role,

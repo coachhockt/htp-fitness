@@ -5,8 +5,9 @@ import {
   Keyboard, TouchableWithoutFeedback, ScrollView,
 } from 'react-native';
 import { db } from '../../firebase';
-import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
 
 export default function ClientsScreen({ navigation }) {
@@ -21,6 +22,7 @@ export default function ClientsScreen({ navigation }) {
   const [newWeight, setNewWeight] = useState('');
   const [newFat, setNewFat] = useState('');
   const [newNote, setNewNote] = useState('');
+  const insets = useSafeAreaInsets();
 
   const [sessionCounts, setSessionCounts] = useState({});
 
@@ -85,9 +87,10 @@ export default function ClientsScreen({ navigation }) {
           onPress: async () => {
             const sessionsQuery = query(collection(db, 'sessions'), where('clientId', '==', client.id));
             const sessionsSnap = await getDocs(sessionsQuery);
-            const deletes = sessionsSnap.docs.map(d => deleteDoc(d.ref));
-            await Promise.all(deletes);
-            await deleteDoc(doc(db, 'clients', client.id));
+            const batch = writeBatch(db);
+            sessionsSnap.docs.forEach(d => batch.delete(d.ref));
+            batch.delete(doc(db, 'clients', client.id));
+            await batch.commit();
           },
         },
       ]
@@ -99,7 +102,7 @@ export default function ClientsScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.logoContainer}>
         <Image
           source={require('../../assets/logo.png')}
@@ -115,7 +118,7 @@ export default function ClientsScreen({ navigation }) {
               <Text style={styles.adminBtnText}>Admin</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+          <TouchableOpacity style={styles.logoutBtn} onPress={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}>
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
         </View>
@@ -136,7 +139,6 @@ export default function ClientsScreen({ navigation }) {
           <TouchableOpacity
             style={styles.card}
             onPress={() => navigation.navigate('ClientDetail', { clientId: item.id, name: item.name })}
-            onLongPress={() => handleDeleteClient(item)}
           >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{item.firstName?.[0]?.toUpperCase() || item.name[0].toUpperCase()}{item.lastName?.[0]?.toUpperCase() || ''}</Text>
@@ -149,7 +151,13 @@ export default function ClientsScreen({ navigation }) {
                 {sessionCounts[item.id] || 0} session{(sessionCounts[item.id] || 0) !== 1 ? 's' : ''} logged
               </Text>
             </View>
-            <Text style={styles.arrow}>›</Text>
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={() => handleDeleteClient(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.deleteBtnText}>✕</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -328,7 +336,17 @@ const styles = StyleSheet.create({
   name: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
   sessionCount: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, fontFamily: FONTS.regular },
   phone: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, fontFamily: FONTS.regular },
-  arrow: { color: COLORS.textMuted, fontSize: 24 },
+  deleteBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 10,
+    padding: 4,
+  },
+  deleteBtnText: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontFamily: FONTS.semiBold,
+  },
   empty: {
     color: COLORS.textMuted,
     textAlign: 'center',
