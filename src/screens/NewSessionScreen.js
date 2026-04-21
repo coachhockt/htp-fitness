@@ -168,6 +168,7 @@ export default function NewSessionScreen({ route, navigation }) {
   }
 
   async function saveAndGoBack() {
+    if (saving) return;
     const cleaned = exercises
       .map(ex => ({
         name: ex.name,
@@ -185,11 +186,13 @@ export default function NewSessionScreen({ route, navigation }) {
       return;
     }
 
+    setSaving(true);
     try {
       if (user.role !== 'admin') {
         const count = await getDailySessionCount();
         if (count >= 10) {
           Alert.alert('Daily Limit', 'You have reached the maximum of 10 sessions per day.');
+          setSaving(false);
           return;
         }
       }
@@ -204,6 +207,7 @@ export default function NewSessionScreen({ route, navigation }) {
       navigation.goBack();
     } catch (e) {
       Alert.alert('Error saving', e.message);
+      setSaving(false);
     }
   }
 

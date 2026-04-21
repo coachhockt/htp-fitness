@@ -131,6 +131,14 @@ export default function UserDashboardScreen({ navigation }) {
       : editFirst.trim();
     const newWeight = editWeight.trim() ? parseFloat(editWeight.trim()) : null;
     const newFat = editFat.trim() ? parseFloat(editFat.trim()) : null;
+    if (newWeight !== null && isNaN(newWeight)) {
+      Alert.alert('Error', 'Body weight must be a number.');
+      return;
+    }
+    if (newFat !== null && isNaN(newFat)) {
+      Alert.alert('Error', 'Body fat must be a number.');
+      return;
+    }
     const weightChanged = newWeight !== (profile.bodyWeight || null);
     const fatChanged = newFat !== (profile.bodyFat || null);
 

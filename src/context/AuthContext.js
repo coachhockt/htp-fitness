@@ -48,25 +48,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
-    // Check lockout by querying user doc by email
-    const usersQuery = query(collection(db, 'users'), where('email', '==', email));
-    const usersSnap = await getDocs(usersQuery);
-    if (!usersSnap.empty) {
-      const existingDoc = usersSnap.docs[0];
-      const existingData = existingDoc.data();
-      if (existingData.lockUntil) {
-        const lockTime = new Date(existingData.lockUntil).getTime();
-        const now = Date.now();
-        if (now < lockTime) {
-          const minsLeft = Math.ceil((lockTime - now) / 60000);
-          throw new Error(`Account locked. Try again in ${minsLeft} minute${minsLeft !== 1 ? 's' : ''}.`);
-        } else {
-          // Lock expired, reset
-          await updateDoc(existingDoc.ref, { failedAttempts: 0, lockUntil: null });
-        }
-      }
-    }
-
+    // Authenticate first via REST API
     const res = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
       {
@@ -78,36 +60,31 @@ export function AuthProvider({ children }) {
     const data = await res.json();
 
     if (data.error) {
-      // Track failed attempts if user doc exists
-      if (!usersSnap.empty) {
-        const existingDoc = usersSnap.docs[0];
-        const existingData = existingDoc.data();
-        const attempts = (existingData.failedAttempts || 0) + 1;
-        const updates = { failedAttempts: attempts };
-        if (attempts >= 5) {
-          updates.lockUntil = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-          await updateDoc(existingDoc.ref, updates);
-          throw new Error('Account locked for 10 minutes due to too many failed attempts.');
-        }
-        await updateDoc(existingDoc.ref, updates);
-        const remaining = 5 - attempts;
-        if (remaining <= 2) {
-          throw new Error(`Wrong password. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining before 10-minute lockout.`);
-        }
-      }
       throw new Error(data.error.message.replace(/_/g, ' '));
     }
 
     // Sign into Firebase Auth SDK so Firestore rules can verify identity
-    const loginAuthResult = await signInWithEmailAndPassword(getAuth(), email, password);
-    console.log('[Auth] signInWithEmailAndPassword result (login):', JSON.stringify(loginAuthResult, null, 2));
+    await signInWithEmailAndPassword(getAuth(), email, password);
 
+    // Now that we're authenticated, check lockout and track failed attempts
     const userDocRef = doc(db, 'users', data.localId);
     const userDocSnap = await getDoc(userDocRef);
     if (userDocSnap.exists()) {
       const userData = userDocSnap.data();
-      if (userData.status === 'frozen') throw new Error('Your account has been frozen. Contact admin.');
-      if (userData.status === 'closed') throw new Error('Your account has been closed.');
+      // Check lockout
+      if (userData.lockUntil) {
+        const lockTime = new Date(userData.lockUntil).getTime();
+        const now = Date.now();
+        if (now < lockTime) {
+          const minsLeft = Math.ceil((lockTime - now) / 60000);
+          await signOut(getAuth());
+          throw new Error(`Account locked. Try again in ${minsLeft} minute${minsLeft !== 1 ? 's' : ''}.`);
+        } else {
+          await updateDoc(userDocRef, { failedAttempts: 0, lockUntil: null });
+        }
+      }
+      if (userData.status === 'frozen') { await signOut(getAuth()); throw new Error('Your account has been frozen. Contact admin.'); }
+      if (userData.status === 'closed') { await signOut(getAuth()); throw new Error('Your account has been closed.'); }
       // Reset failed attempts on successful login
       await updateDoc(userDocRef, { failedAttempts: 0, lockUntil: null });
     } else {
@@ -146,11 +123,9 @@ export function AuthProvider({ children }) {
     );
     const data = await res.json();
     if (data.error) throw new Error(data.error.message.replace(/_/g, ' '));
-    console.log('[Auth] signUp response:', JSON.stringify(data, null, 2));
 
     // Sign into Firebase Auth SDK so Firestore rules can verify identity
-    const registerAuthResult = await signInWithEmailAndPassword(getAuth(), email, password);
-    console.log('[Auth] signInWithEmailAndPassword result (register):', JSON.stringify(registerAuthResult, null, 2));
+    await signInWithEmailAndPassword(getAuth(), email, password);
 
     const role = data.email === ADMIN_EMAIL ? 'admin' : 'user';
     const userDoc = {
@@ -161,10 +136,8 @@ export function AuthProvider({ children }) {
       failedAttempts: 0,
       lockUntil: null,
     };
-    console.log('[Auth] Writing user doc to Firestore:', JSON.stringify(userDoc, null, 2));
     try {
       await setDoc(doc(db, 'users', data.localId), userDoc);
-      console.log('[Auth] User doc written successfully for uid:', data.localId);
     } catch (e) {
       console.error('[Auth] Failed to write user doc:', e);
       throw e;
