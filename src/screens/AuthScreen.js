@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, Image, ActivityIndicator,
   Modal, Pressable, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth, getSavedEmail } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
 
 export default function AuthScreen() {
@@ -19,8 +20,22 @@ export default function AuthScreen() {
   const [forgotModalVisible, setForgotModalVisible] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const { login, register } = useAuth();
   const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+
+  useEffect(() => {
+    (async () => {
+      const remembered = await AsyncStorage.getItem('remember_email');
+      if (remembered) {
+        setEmail(remembered);
+        setRememberMe(true);
+      } else {
+        const saved = await getSavedEmail();
+        if (saved) setEmail(saved);
+      }
+    })();
+  }, []);
 
   const EMAIL_DOMAINS = [
     { prefix: 'g', domain: '@gmail.com' },
@@ -93,6 +108,11 @@ export default function AuthScreen() {
     try {
       if (isLogin) {
         await login(email.trim(), password);
+        if (rememberMe) {
+          await AsyncStorage.setItem('remember_email', email.trim());
+        } else {
+          await AsyncStorage.removeItem('remember_email');
+        }
       } else {
         await register(email.trim(), password);
       }
@@ -202,6 +222,17 @@ export default function AuthScreen() {
         </>
       )}
 
+      {isLogin && (
+        <TouchableOpacity style={styles.rememberRow} onPress={() => setRememberMe(!rememberMe)}>
+          <Ionicons
+            name={rememberMe ? 'checkbox' : 'square-outline'}
+            size={20}
+            color={rememberMe ? COLORS.accent : COLORS.textMuted}
+          />
+          <Text style={styles.rememberText}>Remember me</Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#000" />
@@ -216,12 +247,15 @@ export default function AuthScreen() {
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity style={styles.toggleButton} onPress={() => { setIsLogin(!isLogin); setConfirmPassword(''); }}>
-        <Text style={styles.toggleText}>
-          {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
-        </Text>
-      </TouchableOpacity>
       </ScrollView>
+
+      <View style={styles.bottomBar}>
+        <TouchableOpacity style={styles.toggleButton} onPress={() => { setIsLogin(!isLogin); setConfirmPassword(''); }}>
+          <Text style={styles.toggleText}>
+            {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <Modal visible={forgotModalVisible} transparent animationType="slide">
         <KeyboardAvoidingView
@@ -268,7 +302,6 @@ export default function AuthScreen() {
                     }
                   );
                   const data = await res.json();
-                  console.log('Reset response:', JSON.stringify(data));
                   if (data.error) {
                     const msg = data.error.message;
                     if (msg === 'EMAIL_NOT_FOUND') {
@@ -351,6 +384,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: FONTS.extraBold,
   },
+  bottomBar: {
+    paddingHorizontal: 32,
+    paddingBottom: 36,
+    paddingTop: 12,
+  },
   toggleButton: {
     borderColor: COLORS.border,
     borderWidth: 1,
@@ -413,6 +451,18 @@ const styles = StyleSheet.create({
   },
   charCountMax: {
     color: COLORS.danger,
+  },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  rememberText: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    fontFamily: FONTS.regular,
   },
   forgotText: {
     color: COLORS.accent,

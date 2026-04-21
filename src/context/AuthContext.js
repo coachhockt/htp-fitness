@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { db, app } from '../../firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -7,15 +8,12 @@ import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOu
 const AuthContext = createContext(null);
 const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
 const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL;
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 let _auth = null;
 function getAuth() {
   if (!_auth) {
-    console.log('[Auth] Initializing Firebase Auth...');
     _auth = initializeAuth(app, { persistence: inMemoryPersistence });
-    console.log('[Auth] Firebase Auth initialized:', _auth.app.name);
-  } else {
-    console.log('[Auth] Reusing existing Firebase Auth instance');
   }
   return _auth;
 }
@@ -25,26 +23,29 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   React.useEffect(() => {
-    AsyncStorage.getItem('user').then(async (saved) => {
-      if (saved) {
-        const u = JSON.parse(saved);
-        try {
-          const userDoc = await getDoc(doc(db, 'users', u.uid));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            if (data.status === 'frozen' || data.status === 'closed') {
-              await AsyncStorage.removeItem('user');
-              setLoading(false);
-              return;
-            }
-            u.role = data.role;
-            u.profile = data.profile || null;
+    (async () => {
+      try {
+        const savedEmail = await SecureStore.getItemAsync('auth_email');
+        const savedPassword = await SecureStore.getItemAsync('auth_password');
+        const savedLoginAt = await SecureStore.getItemAsync('auth_loginAt');
+
+        if (savedEmail && savedPassword && savedLoginAt) {
+          const age = Date.now() - parseInt(savedLoginAt, 10);
+          if (age < SESSION_MAX_AGE) {
+            // Auto-login with stored credentials
+            await login(savedEmail, savedPassword);
+            setLoading(false);
+            return;
           }
-        } catch (e) {}
-        setUser(u);
+          // Session expired — clear credentials
+          await clearCredentials();
+        }
+      } catch (e) {
+        // Auto-login failed — fall through to login screen
+        await clearCredentials();
       }
       setLoading(false);
-    });
+    })();
   }, []);
 
   async function login(email, password) {
@@ -110,6 +111,7 @@ export function AuthProvider({ children }) {
     };
     setUser(u);
     await AsyncStorage.setItem('user', JSON.stringify(u));
+    await saveCredentials(email, password);
   }
 
   async function register(email, password) {
@@ -158,6 +160,20 @@ export function AuthProvider({ children }) {
     const u = { uid: data.localId, email: data.email, role, profile: null };
     setUser(u);
     await AsyncStorage.setItem('user', JSON.stringify(u));
+    await saveCredentials(email, password);
+  }
+
+  async function saveCredentials(email, password) {
+    await SecureStore.setItemAsync('auth_email', email);
+    await SecureStore.setItemAsync('auth_password', password);
+    await SecureStore.setItemAsync('auth_loginAt', Date.now().toString());
+  }
+
+  async function clearCredentials() {
+    await SecureStore.deleteItemAsync('auth_email');
+    await SecureStore.deleteItemAsync('auth_password');
+    await SecureStore.deleteItemAsync('auth_loginAt');
+    await AsyncStorage.removeItem('user');
   }
 
   async function saveProfile(profileData) {
@@ -169,7 +185,7 @@ export function AuthProvider({ children }) {
 
   async function logout() {
     setUser(null);
-    await AsyncStorage.removeItem('user');
+    await clearCredentials();
     try { await signOut(getAuth()); } catch (e) {}
   }
 
@@ -181,3 +197,11 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+
+export async function getSavedEmail() {
+  try {
+    return await SecureStore.getItemAsync('auth_email');
+  } catch {
+    return null;
+  }
+}
