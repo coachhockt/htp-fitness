@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.htp.fitness"
+      "bundleIdentifier": "com.htp.fitness",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,6 +31,12 @@
       "expo-web-browser",
       "@react-native-community/datetimepicker",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "239c2585-a100-4712-aa9b-ecc2199f0d5c"
+      }
+    },
+    "owner": "coach.hockt"
   }
 }
