@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import ProfileMenu from '../components/ProfileMenu';
 
 const PAGE_SIZE = 10;
 
@@ -103,6 +104,19 @@ export default function UserDashboardScreen({ navigation }) {
         return d >= fromDate && d <= to;
       })
     : sessions;
+
+  const sessionsThisWeek = (() => {
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); // Monday
+    startOfWeek.setHours(0, 0, 0, 0);
+    return sessions.filter(s => {
+      if (!s.date) return false;
+      const d = s.date.toDate ? s.date.toDate() : new Date(s.date);
+      return d >= startOfWeek;
+    }).length;
+  })();
 
   const totalPages = Math.ceil(filteredSessions.length / PAGE_SIZE);
   const pagedSessions = filteredSessions.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -201,44 +215,21 @@ export default function UserDashboardScreen({ navigation }) {
 
             <View style={styles.header}>
               <Text style={styles.greeting}>Hey, {profile.fullName?.split(' ')[0] || 'there'}</Text>
-              <TouchableOpacity style={styles.logoutBtn} onPress={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}>
-                <Text style={styles.logoutText}>Log Out</Text>
-              </TouchableOpacity>
+              <ProfileMenu
+                user={user}
+                onProfile={openEditProfile}
+                onSettings={() => {}}
+                onLogout={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}
+                topOffset={insets.top + 110}
+                extraItems={[
+                  { label: 'View Progress', icon: 'trending-up-outline', onPress: () => navigation.navigate('Progress', { clientId: user.uid, name: profile.fullName || 'My' }) },
+                ]}
+              />
             </View>
 
-            <View style={styles.profileCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>
-                  {profile.fullName?.[0]?.toUpperCase() || '?'}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.profileName}>{profile.fullName || 'User'}</Text>
-                <Text style={styles.profileMeta}>
-                  {profile.age ? `Age: ${profile.age}` : ''}
-                  {profile.sex ? ` · Sex: ${profile.sex}` : ''}
-                  {profile.bodyWeight ? `\nWeight: ${profile.bodyWeight} lbs` : ''}
-                  {profile.bodyFat ? ` · BF: ${profile.bodyFat}%` : ''}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={openEditProfile} style={styles.editBtn}>
-                <Text style={styles.editBtnText}>Edit</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => navigation.navigate('NewSession', { clientId: user.uid, name: profile.fullName || 'My Session' })}
-              >
-                <Text style={styles.primaryBtnText}>+ New Session</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={() => navigation.navigate('Progress', { clientId: user.uid, name: profile.fullName || 'My' })}
-              >
-                <Text style={styles.secondaryBtnText}>View Progress</Text>
-              </TouchableOpacity>
+            <View style={styles.weekCard}>
+              <Text style={styles.weekCount}>{sessionsThisWeek}</Text>
+              <Text style={styles.weekLabel}>Sessions trained this week</Text>
             </View>
 
             <Text style={styles.sectionLabel}>
@@ -392,10 +383,17 @@ export default function UserDashboardScreen({ navigation }) {
           ) : null
         }
         ListEmptyComponent={
-          <Text style={styles.empty}>{filtering ? 'No sessions found in this date range.' : 'No sessions logged yet.\nTap "+ New Session" to start.'}</Text>
+          <Text style={styles.empty}>{filtering ? 'No sessions found in this date range.' : 'No sessions logged yet.\nTap "Start Training" to begin.'}</Text>
         }
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
       />
+
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('NewSession', { clientId: user.uid, name: profile.fullName || 'My Session' })}
+      >
+        <Text style={styles.fabText}>Start Training</Text>
+      </TouchableOpacity>
 
       <Modal visible={editModal} transparent animationType="slide">
         <KeyboardAvoidingView
@@ -515,64 +513,38 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bold,
     color: COLORS.text,
   },
-  logoutBtn: {
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  logoutText: { color: COLORS.accent, fontSize: 13, fontFamily: FONTS.semiBold },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  weekCard: {
     backgroundColor: COLORS.card,
     borderRadius: 14,
-    padding: 16,
+    padding: 20,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
+    alignItems: 'center',
   },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  weekCount: {
+    color: COLORS.accent,
+    fontSize: 36,
+    fontWeight: '800',
+    fontFamily: FONTS.extraBold,
+  },
+  weekLabel: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontFamily: FONTS.semiBold,
+    marginTop: 4,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 36,
+    right: 24,
+    left: 24,
     backgroundColor: COLORS.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  avatarText: { color: '#000', fontWeight: '800', fontSize: 20, fontFamily: FONTS.extraBold },
-  profileName: { color: COLORS.text, fontWeight: '700', fontSize: 18, fontFamily: FONTS.bold },
-  profileMeta: { color: COLORS.textMuted, fontSize: 13, marginTop: 2, fontFamily: FONTS.regular },
-  editBtn: {
-    backgroundColor: COLORS.background,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  editBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 13, fontFamily: FONTS.bold },
-  actions: { flexDirection: 'row', gap: 10, marginBottom: 28 },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    padding: 17,
     alignItems: 'center',
   },
-  primaryBtnText: { color: '#000', fontWeight: '800', fontSize: 15, fontFamily: FONTS.extraBold },
-  secondaryBtn: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  secondaryBtnText: { color: COLORS.text, fontWeight: '600', fontSize: 15, fontFamily: FONTS.semiBold },
+  fabText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
   sectionLabel: {
     color: COLORS.textMuted,
     fontSize: 11,

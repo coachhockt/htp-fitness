@@ -9,6 +9,7 @@ import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, del
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
+import ProfileMenu from '../components/ProfileMenu';
 
 export default function ClientsScreen({ navigation }) {
   const { user, logout } = useAuth();
@@ -112,16 +113,14 @@ export default function ClientsScreen({ navigation }) {
       </View>
       <View style={styles.header}>
         <Text style={styles.title}>Clients</Text>
-        <View style={styles.headerRight}>
-          {user.role === 'admin' && (
-            <TouchableOpacity style={styles.adminBtn} onPress={() => navigation.navigate('Admin')}>
-              <Text style={styles.adminBtnText}>Admin</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.logoutBtn} onPress={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}>
-            <Text style={styles.logoutText}>Log Out</Text>
-          </TouchableOpacity>
-        </View>
+        <ProfileMenu
+          user={user}
+          profileLabel="Admin"
+          onProfile={() => navigation.navigate('Admin')}
+          onSettings={() => {}}
+          onLogout={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}
+          topOffset={insets.top + 130}
+        />
       </View>
 
       <TextInput
@@ -281,25 +280,6 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   title: { fontSize: 24, fontWeight: '800', color: COLORS.text, fontFamily: FONTS.extraBold },
-  headerRight: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  adminBtn: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  adminBtnText: { color: '#000', fontSize: 13, fontFamily: FONTS.semiBold },
-  logoutBtn: {
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  logoutText: { color: COLORS.accent, fontSize: 13, fontFamily: FONTS.semiBold },
   search: {
     backgroundColor: COLORS.card,
     marginHorizontal: 20,

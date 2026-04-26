@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, KeyboardAvoidingView, Platform, BackHandler,
+  Modal, Pressable,
 } from 'react-native';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
@@ -29,10 +30,42 @@ const ABBREVIATIONS = {
   'bp': 'bench press', 'dl': 'deadlift', 'sq': 'squat',
 };
 
-function SetRow({ set, index, onUpdate, onDelete }) {
+const SET_COLORS = {
+  dropset: '#D4872A',
+  superset: '#4A90D9',
+};
+
+function SetBadge({ type, index, isAboveDropset }) {
+  if (type === 'dropset') {
+    return (
+      <View style={[styles.badge, { backgroundColor: SET_COLORS.dropset + '22' }]}>
+        <Text style={[styles.badgeText, { color: SET_COLORS.dropset }]}>D.S</Text>
+      </View>
+    );
+  }
+  if (type === 'superset') {
+    return (
+      <View style={[styles.badge, { backgroundColor: SET_COLORS.superset + '22' }]}>
+        <Text style={[styles.badgeText, { color: SET_COLORS.superset }]}>S.S</Text>
+      </View>
+    );
+  }
+  return <Text style={[styles.setNum, isAboveDropset && { color: SET_COLORS.dropset }]}>{index + 1}</Text>;
+}
+
+function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset }) {
+  const rowBg = set.type === 'dropset' ? SET_COLORS.dropset + '10'
+    : set.type === 'superset' ? SET_COLORS.superset + '10'
+    : 'transparent';
+
   return (
-    <View style={styles.setRow}>
-      <Text style={styles.setNum}>{index + 1}</Text>
+    <View style={[styles.setRow, { backgroundColor: rowBg, borderRadius: 8 }]}>
+      <TouchableOpacity onPress={() => onTagPress(index)} style={styles.setNumBtn}>
+        {set.type === 'dropset' && index > 0 && (
+          <View style={styles.dropsetLine} />
+        )}
+        <SetBadge type={set.type} index={index} isAboveDropset={isAboveDropset} />
+      </TouchableOpacity>
       <TextInput
         style={styles.setInput}
         placeholder="lbs"
@@ -89,6 +122,7 @@ export default function NewSessionScreen({ route, navigation }) {
   const [saving, setSaving] = useState(false);
   const [pastExercises, setPastExercises] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
+  const [tagMenu, setTagMenu] = useState(null); // { exIdx, setIdx }
 
   useEffect(() => {
     async function loadPast() {
@@ -177,6 +211,7 @@ export default function NewSessionScreen({ route, navigation }) {
           .map(s => ({
             weight: parseFloat(s.weight) || 0,
             reps: parseInt(s.reps) || 0,
+            ...(s.type ? { type: s.type } : {}),
           })),
       }))
       .filter(ex => ex.sets.length > 0);
@@ -232,16 +267,27 @@ export default function NewSessionScreen({ route, navigation }) {
   function addExercise() {
     const trimmed = newExerciseName.trim();
     if (!trimmed) return;
-    setExercises(prev => [...prev, { name: trimmed, sets: [{ weight: '', reps: '' }] }]);
+    setExercises(prev => [...prev, { name: trimmed, sets: [{ weight: '', reps: '', type: null }] }]);
     setNewExerciseName('');
   }
 
   function addSet(exIdx) {
     setExercises(prev =>
       prev.map((ex, i) =>
-        i === exIdx ? { ...ex, sets: [...ex.sets, { weight: '', reps: '' }] } : ex
+        i === exIdx ? { ...ex, sets: [...ex.sets, { weight: '', reps: '', type: null }] } : ex
       )
     );
+  }
+
+  function tagSet(exIdx, setIdx, type) {
+    setExercises(prev =>
+      prev.map((ex, i) =>
+        i === exIdx
+          ? { ...ex, sets: ex.sets.map((s, j) => (j === setIdx ? { ...s, type } : s)) }
+          : ex
+      )
+    );
+    setTagMenu(null);
   }
 
   function updateSet(exIdx, setIdx, field, value) {
@@ -280,6 +326,7 @@ export default function NewSessionScreen({ route, navigation }) {
           .map(s => ({
             weight: parseFloat(s.weight) || 0,
             reps: parseInt(s.reps) || 0,
+            ...(s.type ? { type: s.type } : {}),
           })),
       }))
       .filter(ex => ex.sets.length > 0);
@@ -347,6 +394,8 @@ export default function NewSessionScreen({ route, navigation }) {
                 index={setIdx}
                 onUpdate={(si, field, val) => updateSet(exIdx, si, field, val)}
                 onDelete={(si) => deleteSet(exIdx, si)}
+                onTagPress={(si) => setTagMenu({ exIdx, setIdx: si })}
+                isAboveDropset={ex.sets[setIdx + 1]?.type === 'dropset'}
               />
             ))}
 
@@ -407,6 +456,44 @@ export default function NewSessionScreen({ route, navigation }) {
           <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Session'}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal visible={tagMenu !== null} transparent animationType="fade">
+        <Pressable style={styles.tagOverlay} onPress={() => setTagMenu(null)}>
+          <View style={styles.tagMenu} onStartShouldSetResponder={() => true}>
+            <Text style={styles.tagTitle}>Set Type</Text>
+            <TouchableOpacity
+              style={styles.tagOption}
+              onPress={() => tagSet(tagMenu.exIdx, tagMenu.setIdx, 'dropset')}
+            >
+              <View style={[styles.tagDot, { backgroundColor: SET_COLORS.dropset }]} />
+              <Text style={styles.tagOptionText}>Drop Set</Text>
+              {tagMenu && exercises[tagMenu.exIdx]?.sets[tagMenu.setIdx]?.type === 'dropset' && (
+                <Text style={styles.tagCheck}>✓</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.tagOption}
+              onPress={() => tagSet(tagMenu.exIdx, tagMenu.setIdx, 'superset')}
+            >
+              <View style={[styles.tagDot, { backgroundColor: SET_COLORS.superset }]} />
+              <Text style={styles.tagOptionText}>Super Set</Text>
+              {tagMenu && exercises[tagMenu.exIdx]?.sets[tagMenu.setIdx]?.type === 'superset' && (
+                <Text style={styles.tagCheck}>✓</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tagOption, { borderBottomWidth: 0 }]}
+              onPress={() => tagSet(tagMenu.exIdx, tagMenu.setIdx, null)}
+            >
+              <View style={[styles.tagDot, { backgroundColor: COLORS.textMuted }]} />
+              <Text style={styles.tagOptionText}>Normal</Text>
+              {tagMenu && !exercises[tagMenu.exIdx]?.sets[tagMenu.setIdx]?.type && (
+                <Text style={styles.tagCheck}>✓</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -447,8 +534,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontFamily: FONTS.bold,
   },
-  setRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  setNum: { color: COLORS.textMuted, width: 28, textAlign: 'center', fontSize: 13, fontFamily: FONTS.regular },
+  setRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingVertical: 2 },
+  setNumBtn: { width: 32, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  dropsetLine: { position: 'absolute', top: -12, width: 2, height: 12, backgroundColor: SET_COLORS.dropset, borderRadius: 1 },
+  setNum: { color: COLORS.textMuted, textAlign: 'center', fontSize: 13, fontFamily: FONTS.regular },
+  badge: { borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontSize: 9, fontWeight: '800', fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
   setInput: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -522,4 +613,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     fontFamily: FONTS.bold,
   },
+  tagOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  tagMenu: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: 220, borderWidth: 1, borderColor: COLORS.border },
+  tagTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 12, textAlign: 'center' },
+  tagOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
+  tagDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
+  tagOptionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular, flex: 1 },
+  tagCheck: { color: COLORS.accent, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold },
 });
