@@ -14,6 +14,7 @@ import NewSessionScreen from '../screens/NewSessionScreen';
 import SessionDetailScreen from '../screens/SessionDetailScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import AdminScreen from '../screens/AdminScreen';
+import ActivityCalendarScreen from '../screens/ActivityCalendarScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -80,6 +81,11 @@ export default function AppNavigator() {
               component={AdminScreen}
               options={{ title: 'Manage Accounts' }}
             />
+            <Stack.Screen
+              name="ActivityCalendar"
+              component={ActivityCalendarScreen}
+              options={{ title: 'Activity History' }}
+            />
           </>
         ) : !hasProfile ? (
           <Stack.Screen
@@ -108,6 +114,11 @@ export default function AppNavigator() {
               name="Progress"
               component={ProgressScreen}
               options={({ route }) => ({ title: `${route.params?.name || 'My'} Progress` })}
+            />
+            <Stack.Screen
+              name="ActivityCalendar"
+              component={ActivityCalendarScreen}
+              options={{ title: 'Activity History' }}
             />
           </>
         )}

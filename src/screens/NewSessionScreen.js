@@ -8,7 +8,7 @@ import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { compute1RMs } from '../utils';
+import { compute1RMs, titleCaseExercise } from '../utils';
 
 const COMMON_EXERCISES = [
   'Bench Press', 'Incline Bench Press', 'Decline Bench Press',
@@ -205,7 +205,7 @@ export default function NewSessionScreen({ route, navigation }) {
     if (saving) return;
     const cleaned = exercises
       .map(ex => ({
-        name: ex.name,
+        name: titleCaseExercise(ex.name),
         sets: ex.sets
           .filter(s => s.weight !== '' || s.reps !== '')
           .map(s => ({
@@ -320,7 +320,7 @@ export default function NewSessionScreen({ route, navigation }) {
 
     const cleaned = exercises
       .map(ex => ({
-        name: ex.name,
+        name: titleCaseExercise(ex.name),
         sets: ex.sets
           .filter(s => s.weight !== '' || s.reps !== '')
           .map(s => ({

@@ -1,3 +1,12 @@
+const UPPER_WORDS = new Set(['db', 'bb', 'ez', 'ohp', 'rdl']);
+
+export function titleCaseExercise(name) {
+  return name.trim().split(/\s+/).map(word => {
+    if (UPPER_WORDS.has(word.toLowerCase())) return word.toUpperCase();
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
+}
+
 // Epley formula: 1RM = weight × (1 + reps / 30)
 export function estimate1RM(weight, reps) {
   if (reps <= 0 || weight <= 0) return 0;

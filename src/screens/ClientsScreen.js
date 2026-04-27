@@ -120,6 +120,9 @@ export default function ClientsScreen({ navigation }) {
           onSettings={() => {}}
           onLogout={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}
           topOffset={insets.top + 130}
+          extraItems={[
+            { label: 'Activity History', icon: 'calendar-outline', onPress: () => navigation.navigate('ActivityCalendar') },
+          ]}
         />
       </View>
 

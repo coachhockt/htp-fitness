@@ -1,29 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Image,
+  View, Text, TouchableOpacity, StyleSheet, Alert, Image,
   Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import {
-  collection, query, where, orderBy, onSnapshot, doc, deleteDoc,
+  collection, query, where, onSnapshot, doc,
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import ProfileMenu from '../components/ProfileMenu';
-
-const PAGE_SIZE = 10;
 
 export default function UserDashboardScreen({ navigation }) {
   const { user, logout, saveProfile } = useAuth();
   const [sessions, setSessions] = useState([]);
-  const [page, setPage] = useState(0);
-  const [fromDate, setFromDate] = useState(null);
-  const [toDate, setToDate] = useState(null);
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
-  const [filtering, setFiltering] = useState(false);
+  const [schedule, setSchedule] = useState(null);
   const [editModal, setEditModal] = useState(false);
   const [editFirst, setEditFirst] = useState('');
   const [editLast, setEditLast] = useState('');
@@ -36,74 +29,45 @@ export default function UserDashboardScreen({ navigation }) {
   useEffect(() => {
     const q = query(
       collection(db, 'sessions'),
-      where('clientId', '==', user.uid),
-      orderBy('date', 'desc')
+      where('clientId', '==', user.uid)
     );
     return onSnapshot(q, (snap) => {
       setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, []);
 
-  function formatDate(ts) {
-    if (!ts) return 'In progress';
-    const d = ts.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  }
+  useEffect(() => {
+    return onSnapshot(doc(db, 'schedules', user.uid), (snap) => {
+      if (snap.exists()) setSchedule(snap.data());
+    });
+  }, [user.uid]);
 
-  function totalSets(session) {
-    return session.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0) || 0;
-  }
+  const upcomingWorkouts = (() => {
+    if (!schedule) return [];
+    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const results = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  function confirmDelete(session) {
-    Alert.alert(
-      'Delete Session',
-      `Delete the session from ${formatDate(session.date)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteDoc(doc(db, 'sessions', session.id)) },
-      ]
-    );
-  }
+    // Collect next 21 days worth of candidates
+    for (let i = 0; i < 21 && results.length < 3; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const dayKey = DAY_KEYS[d.getDay()];
 
-  function applyDateFilter() {
-    if (!fromDate || !toDate) {
-      Alert.alert('Select Dates', 'Please select both a start and end date.');
-      return;
+      const isRecurring = schedule.days?.[dayKey]?.enabled;
+      const specific = schedule.specificDates || {};
+      const isSpecific = Array.isArray(specific) ? specific.includes(dateStr) : dateStr in specific;
+
+      if (isRecurring || isSpecific) {
+        const specificLabel = !Array.isArray(specific) && specific[dateStr] ? specific[dateStr] : null;
+        const label = specificLabel || schedule.days?.[dayKey]?.label || null;
+        results.push({ date: d, dateStr, label, isSpecific: isSpecific && !isRecurring });
+      }
     }
-    if (toDate < fromDate) {
-      Alert.alert('Invalid Range', 'End date must be after start date.');
-      return;
-    }
-    const diffDays = (toDate - fromDate) / (1000 * 60 * 60 * 24);
-    if (diffDays > 14) {
-      Alert.alert('Range Too Large', 'Maximum search range is 2 weeks.');
-      return;
-    }
-    setFiltering(true);
-    setPage(0);
-  }
-
-  function clearFilter() {
-    setFromDate(null);
-    setToDate(null);
-    setFiltering(false);
-    setPage(0);
-  }
-
-  function formatPickedDate(date) {
-    if (!date) return 'Select date';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  const filteredSessions = filtering
-    ? sessions.filter(s => {
-        if (!s.date) return false;
-        const d = s.date.toDate ? s.date.toDate() : new Date(s.date);
-        const to = new Date(toDate);
-        to.setHours(23, 59, 59, 999);
-        return d >= fromDate && d <= to;
-      })
-    : sessions;
+    return results.slice(0, 3);
+  })();
 
   const sessionsThisWeek = (() => {
     const now = new Date();
@@ -117,14 +81,6 @@ export default function UserDashboardScreen({ navigation }) {
       return d >= startOfWeek;
     }).length;
   })();
-
-  const totalPages = Math.ceil(filteredSessions.length / PAGE_SIZE);
-  const pagedSessions = filteredSessions.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  function goToCurrentDate() {
-    if (filtering) { clearFilter(); }
-    setPage(0);
-  }
 
   function openEditProfile() {
     const p = user.profile || {};
@@ -200,193 +156,62 @@ export default function UserDashboardScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <FlatList
-        data={sessions}
-        keyExtractor={item => item.id}
-        ListHeaderComponent={
-          <View>
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../../assets/logo.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
+      <View style={{ flex: 1, padding: 20 }}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
 
-            <View style={styles.header}>
-              <Text style={styles.greeting}>Hey, {profile.fullName?.split(' ')[0] || 'there'}</Text>
-              <ProfileMenu
-                user={user}
-                onProfile={openEditProfile}
-                onSettings={() => {}}
-                onLogout={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}
-                topOffset={insets.top + 110}
-                extraItems={[
-                  { label: 'View Progress', icon: 'trending-up-outline', onPress: () => navigation.navigate('Progress', { clientId: user.uid, name: profile.fullName || 'My' }) },
-                ]}
-              />
-            </View>
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Hey, {profile.fullName?.split(' ')[0] || 'there'}</Text>
+          <ProfileMenu
+            user={user}
+            onProfile={openEditProfile}
+            onSettings={() => {}}
+            onLogout={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}
+            topOffset={insets.top + 110}
+            extraItems={[
+              { label: 'Activity History', icon: 'calendar-outline', onPress: () => navigation.navigate('ActivityCalendar') },
+              { label: 'View Progress', icon: 'trending-up-outline', onPress: () => navigation.navigate('Progress', { clientId: user.uid, name: profile.fullName || 'My' }) },
+            ]}
+          />
+        </View>
 
-            <View style={styles.weekCard}>
-              <Text style={styles.weekCount}>{sessionsThisWeek}</Text>
-              <Text style={styles.weekLabel}>Sessions trained this week</Text>
-            </View>
+        <View style={styles.weekCard}>
+          <Text style={styles.weekCount}>{sessionsThisWeek}</Text>
+          <Text style={styles.weekLabel}>Sessions trained this week</Text>
+        </View>
 
-            <Text style={styles.sectionLabel}>
-              Session History ({filteredSessions.length})
-            </Text>
-
-            {/* Date Range Search */}
-            <View style={styles.dateSearchRow}>
-              <TouchableOpacity style={styles.dateInput} onPress={() => setShowFromPicker(true)}>
-                <Text style={fromDate ? styles.dateInputText : styles.dateInputPlaceholder}>
-                  {formatPickedDate(fromDate)}
-                </Text>
-              </TouchableOpacity>
-              <Text style={styles.dateToText}>to</Text>
-              <TouchableOpacity style={styles.dateInput} onPress={() => setShowToPicker(true)}>
-                <Text style={toDate ? styles.dateInputText : styles.dateInputPlaceholder}>
-                  {formatPickedDate(toDate)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.dateSearchActions}>
-              <TouchableOpacity style={styles.searchBtn} onPress={applyDateFilter}>
-                <Text style={styles.searchBtnText}>Search</Text>
-              </TouchableOpacity>
-              {filtering && (
-                <TouchableOpacity style={styles.clearBtn} onPress={clearFilter}>
-                  <Text style={styles.clearBtnText}>Clear</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {filtering && (
-              <Text style={styles.filterInfo}>
-                Showing {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''} from {formatPickedDate(fromDate)} to {formatPickedDate(toDate)}
-              </Text>
-            )}
-            {showFromPicker && (
-              Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade">
-                  <Pressable style={styles.pickerOverlay} onPress={() => setShowFromPicker(false)}>
-                    <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
-                      <DateTimePicker
-                        maximumDate={new Date()}
-                        value={fromDate || new Date()}
-                        mode="date"
-                        display="inline"
-                        onChange={(event, date) => {
-                          if (date) setFromDate(date);
-                        }}
-                        themeVariant="dark"
-                      />
-                      <TouchableOpacity style={styles.pickerDone} onPress={() => setShowFromPicker(false)}>
-                        <Text style={styles.pickerDoneText}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </Pressable>
-                </Modal>
-              ) : (
-                <DateTimePicker
-                        maximumDate={new Date()}
-                  value={fromDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowFromPicker(false);
-                    if (date) setFromDate(date);
-                  }}
-                />
-              )
-            )}
-            {showToPicker && (
-              Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade">
-                  <Pressable style={styles.pickerOverlay} onPress={() => setShowToPicker(false)}>
-                    <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
-                      <DateTimePicker
-                        maximumDate={new Date()}
-                        value={toDate || new Date()}
-                        mode="date"
-                        display="inline"
-                        onChange={(event, date) => {
-                          if (date) setToDate(date);
-                        }}
-                        themeVariant="dark"
-                      />
-                      <TouchableOpacity style={styles.pickerDone} onPress={() => setShowToPicker(false)}>
-                        <Text style={styles.pickerDoneText}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </Pressable>
-                </Modal>
-              ) : (
-                <DateTimePicker
-                        maximumDate={new Date()}
-                  value={toDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowToPicker(false);
-                    if (date) setToDate(date);
-                  }}
-                />
-              )
-            )}
-          </View>
-        }
-        data={pagedSessions}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('SessionDetail', { sessionId: item.id })}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.date}>{formatDate(item.date)}</Text>
-              <Text style={styles.meta}>
-                {item.exercises?.length || 0} exercise{item.exercises?.length !== 1 ? 's' : ''}
-                {'  ·  '}
-                {totalSets(item)} set{totalSets(item) !== 1 ? 's' : ''}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => confirmDelete(item)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.deleteBtnText}>✕</Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
-        )}
-        ListFooterComponent={
-          filteredSessions.length > 0 ? (
-            <View style={styles.pagination}>
-              <TouchableOpacity
-                style={[styles.pageBtn, page === 0 && styles.pageBtnDisabled]}
-                onPress={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <Text style={[styles.pageBtnText, page === 0 && styles.pageBtnTextDisabled]}>‹ Prev</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.currentBtn} onPress={goToCurrentDate}>
-                <Text style={styles.currentBtnText}>Latest</Text>
-              </TouchableOpacity>
-              <Text style={styles.pageInfo}>{page + 1} / {totalPages}</Text>
-              <TouchableOpacity
-                style={[styles.pageBtn, page >= totalPages - 1 && styles.pageBtnDisabled]}
-                onPress={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                <Text style={[styles.pageBtnText, page >= totalPages - 1 && styles.pageBtnTextDisabled]}>Next ›</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null
-        }
-        ListEmptyComponent={
-          <Text style={styles.empty}>{filtering ? 'No sessions found in this date range.' : 'No sessions logged yet.\nTap "Start Training" to begin.'}</Text>
-        }
-        contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
-      />
+        <View>
+          <Text style={styles.upcomingTitle}>Upcoming</Text>
+          {upcomingWorkouts.length > 0 ? (
+            upcomingWorkouts.map((w) => {
+              const isToday = w.date.toDateString() === new Date().toDateString();
+              const isTomorrow = (() => {
+                const tmr = new Date();
+                tmr.setDate(tmr.getDate() + 1);
+                return w.date.toDateString() === tmr.toDateString();
+              })();
+              const dayLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : w.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+              return (
+                <View key={w.dateStr} style={styles.upcomingCard}>
+                  <View style={styles.upcomingDot} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.upcomingDay}>{dayLabel}</Text>
+                    {w.label ? <Text style={styles.upcomingLabel}>{w.label}</Text> : null}
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                </View>
+              );
+            })
+          ) : (
+            <Text style={styles.upcomingEmpty}>No upcoming workouts scheduled</Text>
+          )}
+        </View>
+      </View>
 
       <TouchableOpacity
         style={styles.fab}
@@ -545,155 +370,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fabText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
-  sectionLabel: {
+
+  // Upcoming
+  upcomingTitle: {
     color: COLORS.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: 10,
     fontFamily: FONTS.bold,
   },
-  card: {
+  upcomingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.card,
     borderRadius: 11,
     padding: 14,
-    marginBottom: 9,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  date: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
-  meta: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontFamily: FONTS.regular },
-  deleteBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 10,
-    padding: 4,
-  },
-  deleteBtnText: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontFamily: FONTS.semiBold,
-  },
-  empty: {
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginTop: 48,
-    fontSize: 10,
-    lineHeight: 24,
-    fontFamily: FONTS.regular,
-  },
-  // Date search
-  dateSearchRow: {
-    flexDirection: 'row',
-    gap: 10,
     marginBottom: 8,
-  },
-  dateToText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    fontFamily: FONTS.regular,
-    alignSelf: 'center',
-  },
-  dateInput: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 10,
-    padding: 12,
-    color: COLORS.text,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 13,
-    fontFamily: FONTS.regular,
   },
-  dateSearchActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  searchBtn: {
+  upcomingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: COLORS.accent,
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    marginRight: 12,
   },
-  searchBtnText: {
-    color: '#000',
-    fontWeight: '700',
-    fontSize: 13,
-    fontFamily: FONTS.bold,
-  },
-  clearBtn: {
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  clearBtnText: {
-    color: COLORS.textMuted,
+  upcomingDay: {
+    color: COLORS.text,
+    fontSize: 14,
     fontWeight: '600',
-    fontSize: 13,
     fontFamily: FONTS.semiBold,
   },
-  filterInfo: {
-    color: COLORS.accent,
-    fontSize: 11,
-    fontFamily: FONTS.regular,
-    marginBottom: 12,
-  },
-  dateInputText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.regular },
-  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
-  pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  pickerContainer: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: '90%' },
-  pickerDone: { alignItems: 'center', padding: 12, marginTop: 8 },
-  pickerDoneText: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
-
-  // Pagination
-  pagination: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
-    gap: 12,
-  },
-  pageBtn: {
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  pageBtnDisabled: {
-    opacity: 0.3,
-  },
-  pageBtnText: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontFamily: FONTS.semiBold,
-  },
-  pageBtnTextDisabled: {
-    color: COLORS.textMuted,
-  },
-  currentBtn: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  currentBtnText: {
-    color: '#000',
-    fontSize: 13,
-    fontWeight: '700',
-    fontFamily: FONTS.bold,
-  },
-  pageInfo: {
+  upcomingLabel: {
     color: COLORS.textMuted,
     fontSize: 12,
     fontFamily: FONTS.regular,
+    marginTop: 2,
+  },
+  upcomingEmpty: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontFamily: FONTS.regular,
+    textAlign: 'center',
+    paddingVertical: 16,
   },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },

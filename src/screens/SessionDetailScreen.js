@@ -9,10 +9,30 @@ const SET_COLORS = {
   dropset: '#D4872A',
   superset: '#4A90D9',
 };
+
+const COMMON_EXERCISES = [
+  'Bench Press', 'Incline Bench Press', 'Decline Bench Press',
+  'DB Bench Press', 'DB Incline Bench Press', 'DB Fly', 'DB Incline Fly',
+  'Squat', 'Back Squat', 'Front Squat', 'Goblet Squat', 'Bulgarian Split Squat',
+  'Deadlift', 'Sumo Deadlift', 'Romanian Deadlift', 'DB Romanian Deadlift',
+  'Overhead Press', 'DB Shoulder Press', 'Arnold Press', 'Lateral Raise', 'DB Lateral Raise',
+  'Barbell Row', 'BB Row', 'DB Row', 'Pendlay Row', 'Seated Cable Row', 'T-Bar Row',
+  'Pull Up', 'Chin Up', 'Lat Pulldown',
+  'Barbell Curl', 'BB Curl', 'DB Curl', 'Hammer Curl', 'Preacher Curl', 'EZ Bar Curl',
+  'Tricep Pushdown', 'Skull Crusher', 'Tricep Dip', 'Overhead Tricep Extension',
+  'Leg Press', 'Leg Curl', 'Leg Extension', 'Hip Thrust', 'Calf Raise',
+  'Cable Fly', 'Face Pull', 'Shrug', 'DB Shrug',
+];
+
+const ABBREVIATIONS = {
+  'db': 'dumbbell', 'bb': 'barbell', 'ez': 'ez bar',
+  'ohp': 'overhead press', 'rdl': 'romanian deadlift',
+  'bp': 'bench press', 'dl': 'deadlift', 'sq': 'squat',
+};
 import { db } from '../../firebase';
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { COLORS, FONTS } from '../theme';
-import { estimate1RM, compute1RMs } from '../utils';
+import { estimate1RM, compute1RMs, titleCaseExercise } from '../utils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SessionDetailScreen({ route, navigation }) {
@@ -24,12 +44,48 @@ export default function SessionDetailScreen({ route, navigation }) {
   const [editExercises, setEditExercises] = useState([]);
   const [saving, setSaving] = useState(false);
   const [tagMenu, setTagMenu] = useState(null);
+  const [pastExercises, setPastExercises] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [suggestionIdx, setSuggestionIdx] = useState(null);
 
   useEffect(() => {
     getDoc(doc(db, 'sessions', sessionId)).then(d => {
       if (d.exists()) setSession({ id: d.id, ...d.data() });
     });
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!session?.clientId) return;
+    (async () => {
+      const q = query(collection(db, 'sessions'), where('clientId', '==', session.clientId));
+      const snap = await getDocs(q);
+      const names = new Set();
+      snap.docs.forEach(d => d.data().exercises?.forEach(ex => names.add(ex.name)));
+      setPastExercises([...names].sort());
+    })();
+  }, [session?.clientId]);
+
+  function getExSuggestions(text) {
+    if (!text.trim()) return [];
+    const lower = text.toLowerCase();
+    let expandedTerms = [lower];
+    for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
+      if (lower.includes(abbr)) expandedTerms.push(lower.replace(abbr, full));
+    }
+    const allExercises = [...new Set([...pastExercises, ...COMMON_EXERCISES])];
+    const matches = allExercises.filter(ex => {
+      const exLower = ex.toLowerCase();
+      return expandedTerms.some(term => exLower.includes(term)) ||
+        lower.split(' ').every(word => exLower.includes(word));
+    });
+    return matches.sort((a, b) => {
+      const aIsPast = pastExercises.includes(a);
+      const bIsPast = pastExercises.includes(b);
+      if (aIsPast && !bIsPast) return -1;
+      if (!aIsPast && bIsPast) return 1;
+      return a.localeCompare(b);
+    }).slice(0, 5);
+  }
 
   if (!session) return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background }}>
@@ -89,6 +145,17 @@ export default function SessionDetailScreen({ route, navigation }) {
     setEditExercises(prev =>
       prev.map((ex, i) => (i === exIdx ? { ...ex, name } : ex))
     );
+    const matches = getExSuggestions(name);
+    setSuggestions(matches);
+    setSuggestionIdx(matches.length > 0 ? exIdx : null);
+  }
+
+  function applySuggestion(exIdx, name) {
+    setEditExercises(prev =>
+      prev.map((ex, i) => (i === exIdx ? { ...ex, name } : ex))
+    );
+    setSuggestions([]);
+    setSuggestionIdx(null);
   }
 
   function updateSet(exIdx, setIdx, field, value) {
@@ -146,7 +213,7 @@ export default function SessionDetailScreen({ route, navigation }) {
     const cleaned = editExercises
       .filter(ex => ex.name.trim())
       .map(ex => ({
-        name: ex.name.trim(),
+        name: titleCaseExercise(ex.name),
         sets: ex.sets
           .filter(s => s.weight !== '' || s.reps !== '')
           .map(s => ({
@@ -341,6 +408,22 @@ export default function SessionDetailScreen({ route, navigation }) {
                 <Text style={styles.removeEx}>Remove</Text>
               </TouchableOpacity>
             </View>
+            {suggestionIdx === exIdx && suggestions.length > 0 && (
+              <View style={styles.suggestionsBox}>
+                {suggestions.map((s, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.suggestionItem}
+                    onPress={() => applySuggestion(exIdx, s)}
+                  >
+                    <Text style={styles.suggestionText}>{s}</Text>
+                    {pastExercises.includes(s) && (
+                      <Text style={styles.suggestionBadge}>recent</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             <View style={styles.editColHeaders}>
               <Text style={[styles.editColHeader, { width: 28 }]}>SET</Text>
@@ -608,4 +691,32 @@ const styles = StyleSheet.create({
   tagDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
   tagOptionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular, flex: 1 },
   tagCheck: { color: COLORS.accent, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold },
+
+  // Exercise suggestions
+  suggestionsBox: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+  },
+  suggestionText: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.regular },
+  suggestionBadge: {
+    color: COLORS.accent,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontFamily: FONTS.bold,
+  },
 });
