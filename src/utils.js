@@ -14,6 +14,38 @@ export function estimate1RM(weight, reps) {
   return Math.round(weight * (1 + reps / 30));
 }
 
+export function genSupersetGroupId() {
+  return 'g_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+}
+
+// Returns 'A', 'B', 'C'... in order of first appearance, or null if not in a group
+export function getSupersetLabel(exercises, groupId) {
+  if (!groupId) return null;
+  const seen = [];
+  for (const ex of exercises) {
+    const gid = ex.supersetGroupId;
+    if (gid && !seen.includes(gid)) seen.push(gid);
+  }
+  const idx = seen.indexOf(groupId);
+  return idx === -1 ? null : String.fromCharCode(65 + idx);
+}
+
+// Returns a new exercises array where any superset group with only one member is cleared.
+// Use after deleting/removing an exercise from a group.
+export function cleanupOrphanGroups(exercises) {
+  const counts = {};
+  for (const ex of exercises) {
+    if (ex.supersetGroupId) counts[ex.supersetGroupId] = (counts[ex.supersetGroupId] || 0) + 1;
+  }
+  return exercises.map(ex => {
+    if (ex.supersetGroupId && counts[ex.supersetGroupId] < 2) {
+      const { supersetGroupId, ...rest } = ex;
+      return rest;
+    }
+    return ex;
+  });
+}
+
 // For each exercise, compute the best estimated 1RM from all sets
 export function compute1RMs(exercises) {
   return exercises.map(ex => ({

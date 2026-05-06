@@ -8,7 +8,7 @@ import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { compute1RMs, titleCaseExercise } from '../utils';
+import { compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups } from '../utils';
 
 const COMMON_EXERCISES = [
   'Bench Press', 'Incline Bench Press', 'Decline Bench Press',
@@ -123,6 +123,8 @@ export default function NewSessionScreen({ route, navigation }) {
   const [pastExercises, setPastExercises] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [tagMenu, setTagMenu] = useState(null); // { exIdx, setIdx }
+  const [exerciseMenu, setExerciseMenu] = useState(null); // { exIdx }
+  const [supersetPicker, setSupersetPicker] = useState(null); // { exIdx }
 
   useEffect(() => {
     async function loadPast() {
@@ -203,18 +205,21 @@ export default function NewSessionScreen({ route, navigation }) {
 
   async function saveAndGoBack() {
     if (saving) return;
-    const cleaned = exercises
-      .map(ex => ({
-        name: titleCaseExercise(ex.name),
-        sets: ex.sets
-          .filter(s => s.weight !== '' || s.reps !== '')
-          .map(s => ({
-            weight: parseFloat(s.weight) || 0,
-            reps: parseInt(s.reps) || 0,
-            ...(s.type ? { type: s.type } : {}),
-          })),
-      }))
-      .filter(ex => ex.sets.length > 0);
+    const cleaned = cleanupOrphanGroups(
+      exercises
+        .map(ex => ({
+          name: titleCaseExercise(ex.name),
+          sets: ex.sets
+            .filter(s => s.weight !== '' || s.reps !== '')
+            .map(s => ({
+              weight: parseFloat(s.weight) || 0,
+              reps: parseInt(s.reps) || 0,
+              ...(s.type ? { type: s.type } : {}),
+            })),
+          ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
+        }))
+        .filter(ex => ex.sets.length > 0)
+    );
 
     if (cleaned.length === 0) {
       navigation.goBack();
@@ -273,9 +278,16 @@ export default function NewSessionScreen({ route, navigation }) {
 
   function addSet(exIdx) {
     setExercises(prev =>
-      prev.map((ex, i) =>
-        i === exIdx ? { ...ex, sets: [...ex.sets, { weight: '', reps: '', type: null }] } : ex
-      )
+      prev.map((ex, i) => {
+        if (i !== exIdx) return ex;
+        const last = ex.sets[ex.sets.length - 1];
+        const newSet = {
+          weight: last?.weight || '',
+          reps: last?.reps || '',
+          type: null,
+        };
+        return { ...ex, sets: [...ex.sets, newSet] };
+      })
     );
   }
 
@@ -309,7 +321,33 @@ export default function NewSessionScreen({ route, navigation }) {
   }
 
   function deleteExercise(exIdx) {
-    setExercises(prev => prev.filter((_, i) => i !== exIdx));
+    setExercises(prev => cleanupOrphanGroups(prev.filter((_, i) => i !== exIdx)));
+  }
+
+  function makeSuperset(exIdx, partnerIdx) {
+    setExercises(prev => {
+      const partner = prev[partnerIdx];
+      const groupId = partner.supersetGroupId || genSupersetGroupId();
+      return prev.map((ex, i) => {
+        if (i === exIdx) return { ...ex, supersetGroupId: groupId };
+        if (i === partnerIdx && !partner.supersetGroupId) return { ...ex, supersetGroupId: groupId };
+        return ex;
+      });
+    });
+    setSupersetPicker(null);
+    setExerciseMenu(null);
+  }
+
+  function removeFromSuperset(exIdx) {
+    setExercises(prev => {
+      const next = prev.map((ex, i) => {
+        if (i !== exIdx) return ex;
+        const { supersetGroupId, ...rest } = ex;
+        return rest;
+      });
+      return cleanupOrphanGroups(next);
+    });
+    setExerciseMenu(null);
   }
 
   async function saveSession() {
@@ -318,18 +356,21 @@ export default function NewSessionScreen({ route, navigation }) {
       return;
     }
 
-    const cleaned = exercises
-      .map(ex => ({
-        name: titleCaseExercise(ex.name),
-        sets: ex.sets
-          .filter(s => s.weight !== '' || s.reps !== '')
-          .map(s => ({
-            weight: parseFloat(s.weight) || 0,
-            reps: parseInt(s.reps) || 0,
-            ...(s.type ? { type: s.type } : {}),
-          })),
-      }))
-      .filter(ex => ex.sets.length > 0);
+    const cleaned = cleanupOrphanGroups(
+      exercises
+        .map(ex => ({
+          name: titleCaseExercise(ex.name),
+          sets: ex.sets
+            .filter(s => s.weight !== '' || s.reps !== '')
+            .map(s => ({
+              weight: parseFloat(s.weight) || 0,
+              reps: parseInt(s.reps) || 0,
+              ...(s.type ? { type: s.type } : {}),
+            })),
+          ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
+        }))
+        .filter(ex => ex.sets.length > 0)
+    );
 
     if (cleaned.length === 0) {
       Alert.alert('No data', 'Enter weight or reps for at least one set.');
@@ -370,10 +411,26 @@ export default function NewSessionScreen({ route, navigation }) {
       >
         <Text style={styles.clientLabel}>{name}</Text>
 
-        {exercises.map((ex, exIdx) => (
-          <View key={exIdx} style={styles.exerciseCard}>
+        {exercises.map((ex, exIdx) => {
+          const groupLabel = getSupersetLabel(exercises, ex.supersetGroupId);
+          return (
+          <View
+            key={exIdx}
+            style={[styles.exerciseCard, groupLabel && styles.supersetBorder]}
+          >
             <View style={styles.exHeader}>
-              <Text style={styles.exName}>{ex.name}</Text>
+              <TouchableOpacity
+                style={styles.exNameBtn}
+                onPress={() => setExerciseMenu({ exIdx })}
+                hitSlop={{ top: 6, bottom: 6 }}
+              >
+                <Text style={styles.exName}>{ex.name}</Text>
+                {groupLabel && (
+                  <View style={styles.supersetBadge}>
+                    <Text style={styles.supersetBadgeText}>SUPERSET {groupLabel}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => deleteExercise(exIdx)}>
                 <Text style={styles.removeEx}>Remove</Text>
               </TouchableOpacity>
@@ -403,7 +460,8 @@ export default function NewSessionScreen({ route, navigation }) {
               <Text style={styles.addSetText}>+ Add Set</Text>
             </TouchableOpacity>
           </View>
-        ))}
+          );
+        })}
 
         <View>
           <View style={styles.addExRow}>
@@ -494,6 +552,69 @@ export default function NewSessionScreen({ route, navigation }) {
           </View>
         </Pressable>
       </Modal>
+
+      <Modal visible={exerciseMenu !== null} transparent animationType="fade">
+        <Pressable style={styles.tagOverlay} onPress={() => setExerciseMenu(null)}>
+          <View style={styles.tagMenu} onStartShouldSetResponder={() => true}>
+            <Text style={styles.tagTitle}>
+              {exerciseMenu && exercises[exerciseMenu.exIdx]?.name}
+            </Text>
+            {exerciseMenu && exercises[exerciseMenu.exIdx]?.supersetGroupId ? (
+              <TouchableOpacity
+                style={[styles.tagOption, { borderBottomWidth: 0 }]}
+                onPress={() => removeFromSuperset(exerciseMenu.exIdx)}
+              >
+                <View style={[styles.tagDot, { backgroundColor: SET_COLORS.superset }]} />
+                <Text style={styles.tagOptionText}>Remove from Superset</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.tagOption, { borderBottomWidth: 0 }]}
+                onPress={() => {
+                  const idx = exerciseMenu.exIdx;
+                  setExerciseMenu(null);
+                  setSupersetPicker({ exIdx: idx });
+                }}
+              >
+                <View style={[styles.tagDot, { backgroundColor: SET_COLORS.superset }]} />
+                <Text style={styles.tagOptionText}>Make Superset</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={supersetPicker !== null} transparent animationType="fade">
+        <Pressable style={styles.tagOverlay} onPress={() => setSupersetPicker(null)}>
+          <View style={styles.pickerMenu} onStartShouldSetResponder={() => true}>
+            <Text style={styles.tagTitle}>Pair with…</Text>
+            {(() => {
+              if (!supersetPicker) return null;
+              const others = exercises
+                .map((ex, i) => ({ ex, i }))
+                .filter(({ i }) => i !== supersetPicker.exIdx);
+              if (others.length === 0) {
+                return <Text style={styles.pickerEmpty}>Add another exercise first.</Text>;
+              }
+              return others.map(({ ex, i }, n) => {
+                const partnerLabel = getSupersetLabel(exercises, ex.supersetGroupId);
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    style={[styles.tagOption, n === others.length - 1 && { borderBottomWidth: 0 }]}
+                    onPress={() => makeSuperset(supersetPicker.exIdx, i)}
+                  >
+                    <Text style={styles.tagOptionText}>{ex.name}</Text>
+                    <Text style={styles.pickerHint}>
+                      {partnerLabel ? `In Superset ${partnerLabel}` : 'Available'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              });
+            })()}
+          </View>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -517,13 +638,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
+  supersetBorder: {
+    borderLeftWidth: 4,
+    borderLeftColor: SET_COLORS.superset,
+  },
   exHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 14,
   },
-  exName: { color: COLORS.text, fontWeight: '700', fontSize: 17, flex: 1, fontFamily: FONTS.bold },
+  exNameBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  exName: { color: COLORS.text, fontWeight: '700', fontSize: 17, fontFamily: FONTS.bold },
+  supersetBadge: {
+    backgroundColor: SET_COLORS.superset + '22',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  supersetBadgeText: {
+    color: SET_COLORS.superset,
+    fontSize: 9,
+    fontWeight: '800',
+    fontFamily: FONTS.extraBold,
+    letterSpacing: 0.5,
+  },
   removeEx: { color: COLORS.danger, fontSize: 13, fontFamily: FONTS.regular },
   colHeaders: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   colHeader: {
@@ -614,7 +753,10 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bold,
   },
   tagOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  tagMenu: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: 220, borderWidth: 1, borderColor: COLORS.border },
+  tagMenu: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: 260, borderWidth: 1, borderColor: COLORS.border },
+  pickerMenu: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: 280, maxHeight: '70%', borderWidth: 1, borderColor: COLORS.border },
+  pickerEmpty: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular, textAlign: 'center', paddingVertical: 12 },
+  pickerHint: { color: COLORS.textMuted, fontSize: 11, fontFamily: FONTS.regular, marginLeft: 8 },
   tagTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 12, textAlign: 'center' },
   tagOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
   tagDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
