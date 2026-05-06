@@ -25,10 +25,6 @@ export default function CreateProfileScreen() {
       Alert.alert('Error', 'First name is required');
       return;
     }
-    if (!age.trim() || isNaN(parseInt(age.trim()))) {
-      Alert.alert('Error', 'Age is required');
-      return;
-    }
     const fullName = lastName.trim()
       ? `${firstName.trim()} ${lastName.trim()}`
       : firstName.trim();
@@ -38,7 +34,7 @@ export default function CreateProfileScreen() {
         firstName: firstName.trim(),
         lastName: lastName.trim() || null,
         fullName,
-        age: parseInt(age.trim()),
+        age: age.trim() ? parseInt(age.trim()) : null,
         sex: sex || null,
         bodyWeight: bodyWeight.trim() ? parseFloat(bodyWeight.trim()) : null,
         bodyFat: bodyFat.trim() ? parseFloat(bodyFat.trim()) : null,

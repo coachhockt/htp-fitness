@@ -93,6 +93,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ─── SAVED WORKOUTS COLLECTION ───
+    match /savedWorkouts/{docId} {
+      // Users can read their own saved workouts; admin can read any
+      allow read: if isSignedIn()
+        && (resource.data.clientId == request.auth.uid || isAdmin());
+
+      // Any authenticated user can create (bookmark or admin assign)
+      allow create: if isSignedIn();
+
+      // Owner or admin can update/delete
+      allow update, delete: if isSignedIn()
+        && (resource.data.clientId == request.auth.uid || isAdmin());
+    }
+
     // Deny all other collections by default
     match /{document=**} {
       allow read, write: if false;

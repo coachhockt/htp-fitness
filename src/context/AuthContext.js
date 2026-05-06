@@ -183,6 +183,35 @@ export function AuthProvider({ children }) {
     await AsyncStorage.setItem('user', JSON.stringify(updated));
   }
 
+  async function changePassword(currentPassword, newPassword) {
+    // Re-authenticate first
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, password: currentPassword, returnSecureToken: true }),
+      }
+    );
+    const data = await res.json();
+    if (data.error) throw new Error('Incorrect current password');
+
+    // Update password
+    const updateRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: data.idToken, password: newPassword, returnSecureToken: true }),
+      }
+    );
+    const updateData = await updateRes.json();
+    if (updateData.error) throw new Error(updateData.error.message.replace(/_/g, ' '));
+
+    // Update stored credentials
+    await saveCredentials(user.email, newPassword);
+  }
+
   async function logout() {
     setUser(null);
     await clearCredentials();
@@ -190,7 +219,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, saveProfile }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, saveProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

@@ -15,6 +15,7 @@ import SessionDetailScreen from '../screens/SessionDetailScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import AdminScreen from '../screens/AdminScreen';
 import ActivityCalendarScreen from '../screens/ActivityCalendarScreen';
+import SavedWorkoutsScreen from '../screens/SavedWorkoutsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -86,6 +87,11 @@ export default function AppNavigator() {
               component={ActivityCalendarScreen}
               options={{ title: 'Activity History' }}
             />
+            <Stack.Screen
+              name="SavedWorkouts"
+              component={SavedWorkoutsScreen}
+              options={{ title: 'Saved Workouts' }}
+            />
           </>
         ) : !hasProfile ? (
           <Stack.Screen
@@ -119,6 +125,11 @@ export default function AppNavigator() {
               name="ActivityCalendar"
               component={ActivityCalendarScreen}
               options={{ title: 'Activity History' }}
+            />
+            <Stack.Screen
+              name="SavedWorkouts"
+              component={SavedWorkoutsScreen}
+              options={{ title: 'Saved Workouts' }}
             />
           </>
         )}

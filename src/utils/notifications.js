@@ -32,7 +32,7 @@ export async function scheduleWeeklyReminders(schedule) {
     if (!weekday) continue;
 
     const body = config.label
-      ? `Time for ${config.label}!`
+      ? `Time to train ${config.label}!`
       : 'Time to train!';
 
     await Notifications.scheduleNotificationAsync({
@@ -51,16 +51,20 @@ export async function scheduleWeeklyReminders(schedule) {
   }
 }
 
-export async function scheduleDateReminder(dateStr, reminderTime) {
+export async function scheduleDateReminder(dateStr, reminderTime, label) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [hours, minutes] = (reminderTime || '07:00').split(':').map(Number);
   const triggerDate = new Date(y, m - 1, d, hours, minutes);
   if (triggerDate <= new Date()) return;
 
+  const body = label
+    ? `Time to train ${label}!`
+    : 'Time to train!';
+
   await Notifications.scheduleNotificationAsync({
     content: {
       title: 'Workout Reminder',
-      body: 'Time to train!',
+      body,
       sound: true,
     },
     trigger: {

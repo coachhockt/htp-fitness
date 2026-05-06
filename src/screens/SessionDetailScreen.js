@@ -30,15 +30,19 @@ const ABBREVIATIONS = {
   'bp': 'bench press', 'dl': 'deadlift', 'sq': 'squat',
 };
 import { db } from '../../firebase';
-import { doc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { Ionicons } from '@expo/vector-icons';
+import { doc, getDoc, updateDoc, addDoc, deleteDoc, Timestamp, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
 import { estimate1RM, compute1RMs, titleCaseExercise } from '../utils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SessionDetailScreen({ route, navigation }) {
-  const { sessionId } = route.params;
+  const { sessionId, savedWorkout } = route.params;
+  const { user } = useAuth();
   const [session, setSession] = useState(null);
   const [editing, setEditing] = useState(false);
+  const [bookmarkDocId, setBookmarkDocId] = useState(null);
   const [editDate, setEditDate] = useState(null);
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
   const [editExercises, setEditExercises] = useState([]);
@@ -49,10 +53,52 @@ export default function SessionDetailScreen({ route, navigation }) {
   const [suggestionIdx, setSuggestionIdx] = useState(null);
 
   useEffect(() => {
+    if (savedWorkout && !sessionId) {
+      setSession({ id: savedWorkout.id, exercises: savedWorkout.exercises, date: savedWorkout.createdAt, _isSaved: true });
+      return;
+    }
     getDoc(doc(db, 'sessions', sessionId)).then(d => {
       if (d.exists()) setSession({ id: d.id, ...d.data() });
     });
   }, [sessionId]);
+
+  // Check if this session is bookmarked
+  useEffect(() => {
+    if (!sessionId || !user?.uid) return;
+    const q = query(
+      collection(db, 'savedWorkouts'),
+      where('clientId', '==', user.uid),
+      where('type', '==', 'bookmark'),
+      where('sessionId', '==', sessionId),
+    );
+    getDocs(q).then(snap => {
+      if (!snap.empty) setBookmarkDocId(snap.docs[0].id);
+    });
+  }, [sessionId, user?.uid]);
+
+  async function toggleBookmark() {
+    if (!session || !sessionId) return;
+    if (bookmarkDocId) {
+      await deleteDoc(doc(db, 'savedWorkouts', bookmarkDocId));
+      setBookmarkDocId(null);
+    } else {
+      const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
+      const title = exerciseNames.length > 0
+        ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
+        : 'Workout';
+      const ref = await addDoc(collection(db, 'savedWorkouts'), {
+        clientId: user.uid,
+        type: 'bookmark',
+        sessionId,
+        title,
+        exercises: session.exercises || [],
+        assignedBy: null,
+        createdAt: serverTimestamp(),
+        note: null,
+      });
+      setBookmarkDocId(ref.id);
+    }
+  }
 
   useEffect(() => {
     if (!session?.clientId) return;
@@ -257,9 +303,22 @@ export default function SessionDetailScreen({ route, navigation }) {
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.dateRow}>
           <Text style={styles.date}>{formatDate(session.date)}</Text>
-          <TouchableOpacity onPress={startEditing}>
-            <Text style={styles.editBtn}>Edit</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            {sessionId && !session._isSaved && (
+              <TouchableOpacity onPress={toggleBookmark} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons
+                  name={bookmarkDocId ? 'bookmark' : 'bookmark-outline'}
+                  size={22}
+                  color={bookmarkDocId ? COLORS.accent : COLORS.textMuted}
+                />
+              </TouchableOpacity>
+            )}
+            {!session._isSaved && (
+              <TouchableOpacity onPress={startEditing}>
+                <Text style={styles.editBtn}>Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         <View style={styles.summaryRow}>

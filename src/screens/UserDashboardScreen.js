@@ -14,10 +14,17 @@ import { COLORS, FONTS } from '../theme';
 import ProfileMenu from '../components/ProfileMenu';
 
 export default function UserDashboardScreen({ navigation }) {
-  const { user, logout, saveProfile } = useAuth();
+  const { user, logout, saveProfile, changePassword } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [schedule, setSchedule] = useState(null);
+  const [profileModal, setProfileModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
+  const [settingsModal, setSettingsModal] = useState(false);
+  const [settingsView, setSettingsView] = useState('main'); // 'main' | 'password'
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [editFirst, setEditFirst] = useState('');
   const [editLast, setEditLast] = useState('');
   const [editAge, setEditAge] = useState('');
@@ -82,6 +89,10 @@ export default function UserDashboardScreen({ navigation }) {
     }).length;
   })();
 
+  function openProfileView() {
+    setProfileModal(true);
+  }
+
   function openEditProfile() {
     const p = user.profile || {};
     setEditFirst(p.firstName || p.fullName?.split(' ')[0] || '');
@@ -90,7 +101,32 @@ export default function UserDashboardScreen({ navigation }) {
     setEditSex(p.sex || '');
     setEditWeight(p.bodyWeight ? String(p.bodyWeight) : '');
     setEditFat(p.bodyFat ? String(p.bodyFat) : '');
+    setProfileModal(false);
     setEditModal(true);
+  }
+
+  function openSettings() {
+    setSettingsView('main');
+    setCurrentPw('');
+    setNewPw('');
+    setConfirmPw('');
+    setSettingsModal(true);
+  }
+
+  async function handleChangePassword() {
+    if (!currentPw) { Alert.alert('Error', 'Enter your current password'); return; }
+    if (newPw.length < 6) { Alert.alert('Error', 'New password must be at least 6 characters'); return; }
+    if (newPw !== confirmPw) { Alert.alert('Error', 'Passwords do not match'); return; }
+    setSettingsSaving(true);
+    try {
+      await changePassword(currentPw, newPw);
+      Alert.alert('Success', 'Password updated successfully');
+      setSettingsView('main');
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSettingsSaving(false);
+    }
   }
 
   async function handleSaveProfile() {
@@ -169,12 +205,13 @@ export default function UserDashboardScreen({ navigation }) {
           <Text style={styles.greeting}>Hey, {profile.fullName?.split(' ')[0] || 'there'}</Text>
           <ProfileMenu
             user={user}
-            onProfile={openEditProfile}
-            onSettings={() => {}}
+            onProfile={openProfileView}
+            onSettings={openSettings}
             onLogout={() => Alert.alert('Log Out', 'Are you sure you want to log out?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Log Out', style: 'destructive', onPress: logout }])}
             topOffset={insets.top + 110}
             extraItems={[
               { label: 'Activity History', icon: 'calendar-outline', onPress: () => navigation.navigate('ActivityCalendar') },
+              { label: 'Saved Workouts', icon: 'bookmark-outline', onPress: () => navigation.navigate('SavedWorkouts') },
               { label: 'View Progress', icon: 'trending-up-outline', onPress: () => navigation.navigate('Progress', { clientId: user.uid, name: profile.fullName || 'My' }) },
             ]}
           />
@@ -219,6 +256,44 @@ export default function UserDashboardScreen({ navigation }) {
       >
         <Text style={styles.fabText}>Start Training</Text>
       </TouchableOpacity>
+
+      <Modal visible={profileModal} transparent animationType="fade">
+        <Pressable style={styles.centerBackdrop} onPress={() => setProfileModal(false)}>
+          <View style={styles.centerModal} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Profile</Text>
+              <TouchableOpacity onPress={() => setProfileModal(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.profileRow}>
+              <Text style={styles.profileLabel}>Name</Text>
+              <Text style={styles.profileValue}>{profile.fullName || '—'}</Text>
+            </View>
+            <View style={styles.profileRow}>
+              <Text style={styles.profileLabel}>Age</Text>
+              <Text style={styles.profileValue}>{profile.age || '—'}</Text>
+            </View>
+            <View style={styles.profileRow}>
+              <Text style={styles.profileLabel}>Sex</Text>
+              <Text style={styles.profileValue}>{profile.sex || '—'}</Text>
+            </View>
+            <View style={styles.profileRow}>
+              <Text style={styles.profileLabel}>Body Weight</Text>
+              <Text style={styles.profileValue}>{profile.bodyWeight ? `${profile.bodyWeight} lbs` : '—'}</Text>
+            </View>
+            <View style={styles.profileRow}>
+              <Text style={styles.profileLabel}>Body Fat</Text>
+              <Text style={styles.profileValue}>{profile.bodyFat ? `${profile.bodyFat}%` : '—'}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.modalBtn} onPress={openEditProfile}>
+              <Text style={styles.modalBtnText}>Edit Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal visible={editModal} transparent animationType="slide">
         <KeyboardAvoidingView
@@ -309,6 +384,82 @@ export default function UserDashboardScreen({ navigation }) {
             </TouchableWithoutFeedback>
             </ScrollView>
           </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={settingsModal} transparent animationType="fade">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.centerBackdrop} onPress={() => setSettingsModal(false)}>
+            <View style={styles.centerModal} onStartShouldSetResponder={() => true}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {settingsView === 'main' ? 'Settings' : 'Change Password'}
+              </Text>
+              <TouchableOpacity onPress={() => setSettingsModal(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {settingsView === 'main' ? (
+              <>
+                <View style={styles.settingsItem}>
+                  <Text style={styles.settingsLabel}>Email</Text>
+                  <Text style={styles.settingsValue}>{user.email}</Text>
+                </View>
+                <TouchableOpacity style={styles.settingsBtn} onPress={() => setSettingsView('password')}>
+                  <Ionicons name="lock-closed-outline" size={18} color={COLORS.text} />
+                  <Text style={styles.settingsBtnText}>Change Password</Text>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.fieldLabel}>Current Password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter current password"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={currentPw}
+                  onChangeText={setCurrentPw}
+                  secureTextEntry
+                />
+                <Text style={styles.fieldLabel}>New Password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="At least 6 characters"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={newPw}
+                  onChangeText={setNewPw}
+                  secureTextEntry
+                />
+                <Text style={styles.fieldLabel}>Confirm New Password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Re-enter new password"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={confirmPw}
+                  onChangeText={setConfirmPw}
+                  secureTextEntry
+                />
+                <TouchableOpacity style={[styles.modalBtn, settingsSaving && { opacity: 0.5 }]} onPress={handleChangePassword} disabled={settingsSaving}>
+                  <Text style={styles.modalBtnText}>{settingsSaving ? 'Updating...' : 'Update Password'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.settingsBack} onPress={() => setSettingsView('main')}>
+                  <Text style={styles.settingsBackText}>Back</Text>
+                </TouchableOpacity>
+              </>
+            )}
+            </View>
+            </TouchableWithoutFeedback>
+            </ScrollView>
+            </View>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -418,6 +569,40 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
 
+  // Profile View
+  profileRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  profileLabel: {
+    color: COLORS.textMuted,
+    fontSize: 14,
+    fontFamily: FONTS.regular,
+  },
+  profileValue: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: FONTS.semiBold,
+  },
+
+  centerBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  centerModal: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxHeight: '80%',
+  },
+
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
   modal: {
     backgroundColor: COLORS.card,
@@ -464,4 +649,28 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   modalBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+
+  // Settings
+  settingsItem: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    marginBottom: 12,
+  },
+  settingsLabel: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.regular, marginBottom: 4 },
+  settingsValue: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.semiBold },
+  settingsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 10,
+  },
+  settingsBtnText: { flex: 1, color: COLORS.text, fontSize: 14, fontFamily: FONTS.semiBold },
+  settingsBack: { alignItems: 'center', padding: 12, marginTop: 4 },
+  settingsBackText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular },
 });

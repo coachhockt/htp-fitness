@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
-import { collection, query, where, getDocs, doc, getDoc, setDoc, Timestamp, orderBy, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, addDoc, Timestamp, orderBy, onSnapshot, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -60,6 +60,7 @@ export default function ActivityCalendarScreen({ navigation }) {
   const [showSpecificLabelStep, setShowSpecificLabelStep] = useState(false);
   const [allSessions, setAllSessions] = useState([]);
   const [sessionPage, setSessionPage] = useState(0);
+  const [bookmarkedIds, setBookmarkedIds] = useState({});
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -111,6 +112,45 @@ export default function ActivityCalendarScreen({ navigation }) {
       setAllSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [user.uid]);
+
+  // Fetch bookmarked session IDs
+  useEffect(() => {
+    const q = query(
+      collection(db, 'savedWorkouts'),
+      where('clientId', '==', user.uid),
+      where('type', '==', 'bookmark'),
+    );
+    return onSnapshot(q, (snap) => {
+      const map = {};
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.sessionId) map[data.sessionId] = d.id;
+      });
+      setBookmarkedIds(map);
+    });
+  }, [user.uid]);
+
+  async function toggleBookmark(session) {
+    const existingDocId = bookmarkedIds[session.id];
+    if (existingDocId) {
+      await deleteDoc(doc(db, 'savedWorkouts', existingDocId));
+    } else {
+      const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
+      const title = exerciseNames.length > 0
+        ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
+        : 'Workout';
+      await addDoc(collection(db, 'savedWorkouts'), {
+        clientId: user.uid,
+        type: 'bookmark',
+        sessionId: session.id,
+        title,
+        exercises: session.exercises || [],
+        assignedBy: null,
+        createdAt: serverTimestamp(),
+        note: null,
+      });
+    }
+  }
 
   const PAGE_SIZE = 10;
   const totalPages = Math.ceil(allSessions.length / PAGE_SIZE);
@@ -314,7 +354,8 @@ export default function ActivityCalendarScreen({ navigation }) {
         const specific = data.specificDates || {};
         const dateKeys = Array.isArray(specific) ? specific : Object.keys(specific);
         for (const dateStr of dateKeys) {
-          await scheduleDateReminder(dateStr, data.reminderTime);
+          const label = Array.isArray(specific) ? '' : (specific[dateStr] || '');
+          await scheduleDateReminder(dateStr, data.reminderTime, label);
         }
       }
     } catch (_) {
@@ -505,6 +546,17 @@ export default function ActivityCalendarScreen({ navigation }) {
                   {totalSets(item)} set{totalSets(item) !== 1 ? 's' : ''}
                 </Text>
               </View>
+              <TouchableOpacity
+                style={styles.bookmarkBtn}
+                onPress={() => toggleBookmark(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons
+                  name={bookmarkedIds[item.id] ? 'bookmark' : 'bookmark-outline'}
+                  size={20}
+                  color={bookmarkedIds[item.id] ? COLORS.accent : COLORS.textMuted}
+                />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.sessionDeleteBtn}
                 onPress={() => confirmDeleteSession(item)}
@@ -716,6 +768,7 @@ const styles = StyleSheet.create({
   },
   sessionDate: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
   sessionMeta: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontFamily: FONTS.regular },
+  bookmarkBtn: { padding: 8, marginRight: 4 },
   sessionDeleteBtn: { position: 'absolute', top: 8, right: 10, padding: 4 },
   sessionDeleteText: { color: COLORS.textMuted, fontSize: 10, fontFamily: FONTS.semiBold },
   emptyHistory: { color: COLORS.textMuted, textAlign: 'center', marginTop: 20, fontSize: 13, fontFamily: FONTS.regular },
