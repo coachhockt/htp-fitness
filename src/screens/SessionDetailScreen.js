@@ -34,7 +34,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc, addDoc, deleteDoc, Timestamp, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { estimate1RM, compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups } from '../utils';
+import { estimate1RM, compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SessionDetailScreen({ route, navigation }) {
@@ -80,25 +80,31 @@ export default function SessionDetailScreen({ route, navigation }) {
 
   async function toggleBookmark() {
     if (!session || !sessionId) return;
-    if (bookmarkDocId) {
-      await deleteDoc(doc(db, 'savedWorkouts', bookmarkDocId));
-      setBookmarkDocId(null);
-    } else {
-      const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
-      const title = exerciseNames.length > 0
-        ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
-        : 'Workout';
-      const ref = await addDoc(collection(db, 'savedWorkouts'), {
-        clientId: user.uid,
-        type: 'bookmark',
-        sessionId,
-        title,
-        exercises: session.exercises || [],
-        assignedBy: null,
-        createdAt: serverTimestamp(),
-        note: null,
-      });
-      setBookmarkDocId(ref.id);
+    if (!user?.uid) return;
+    try {
+      if (bookmarkDocId) {
+        await deleteDoc(doc(db, 'savedWorkouts', bookmarkDocId));
+        setBookmarkDocId(null);
+      } else {
+        const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
+        const title = exerciseNames.length > 0
+          ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
+          : 'Workout';
+        const ref = await addDoc(collection(db, 'savedWorkouts'), {
+          clientId: user.uid,
+          type: 'bookmark',
+          sessionId,
+          title,
+          exercises: session.exercises || [],
+          assignedBy: null,
+          createdAt: serverTimestamp(),
+          note: null,
+        });
+        setBookmarkDocId(ref.id);
+      }
+    } catch (err) {
+      console.error('[toggleBookmark]', err);
+      Alert.alert('Bookmark failed', err?.message ?? 'Unknown error');
     }
   }
 
@@ -246,6 +252,10 @@ export default function SessionDetailScreen({ route, navigation }) {
 
   function addExercise() {
     setEditExercises(prev => [...prev, { name: '', sets: [{ weight: '', reps: '', type: null }] }]);
+  }
+
+  function moveExercise(fromIdx, dir) {
+    setEditExercises(prev => moveExerciseInList(prev, fromIdx, dir));
   }
 
   function deleteExercise(exIdx) {
@@ -518,6 +528,22 @@ export default function SessionDetailScreen({ route, navigation }) {
                   <Text style={styles.supersetBadgeText}>SS {groupLabel}</Text>
                 </View>
               )}
+              <TouchableOpacity
+                onPress={() => moveExercise(exIdx, -1)}
+                disabled={exIdx === 0}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                style={{ padding: 4, opacity: exIdx === 0 ? 0.3 : 1 }}
+              >
+                <Ionicons name="chevron-up" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => moveExercise(exIdx, 1)}
+                disabled={exIdx === editExercises.length - 1}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                style={{ padding: 4, opacity: exIdx === editExercises.length - 1 ? 0.3 : 1 }}
+              >
+                <Ionicons name="chevron-down" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => setExerciseMenu({ exIdx })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.textMuted} />
               </TouchableOpacity>
@@ -775,6 +801,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  exerciseCardActive: {
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 12,
+    transform: [{ scale: 1.02 }],
+    borderColor: COLORS.accent,
   },
   supersetBorder: {
     borderLeftWidth: 4,

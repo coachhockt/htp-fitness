@@ -68,7 +68,10 @@ export default function UserDashboardScreen({ navigation }) {
       const isSpecific = Array.isArray(specific) ? specific.includes(dateStr) : dateStr in specific;
 
       if (isRecurring || isSpecific) {
-        const specificLabel = !Array.isArray(specific) && specific[dateStr] ? specific[dateStr] : null;
+        const specificEntry = !Array.isArray(specific) ? specific[dateStr] : null;
+        const specificLabel = typeof specificEntry === 'string'
+          ? specificEntry
+          : specificEntry?.label || null;
         const label = specificLabel || schedule.days?.[dayKey]?.label || null;
         results.push({ date: d, dateStr, label, isSpecific: isSpecific && !isRecurring });
       }

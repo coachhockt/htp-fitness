@@ -8,7 +8,8 @@ import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups } from '../utils';
+import { compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
+import { Ionicons } from '@expo/vector-icons';
 
 const COMMON_EXERCISES = [
   'Bench Press', 'Incline Bench Press', 'Decline Bench Press',
@@ -276,6 +277,10 @@ export default function NewSessionScreen({ route, navigation }) {
     setNewExerciseName('');
   }
 
+  function moveExercise(fromIdx, dir) {
+    setExercises(prev => moveExerciseInList(prev, fromIdx, dir));
+  }
+
   function addSet(exIdx) {
     setExercises(prev =>
       prev.map((ex, i) => {
@@ -430,6 +435,22 @@ export default function NewSessionScreen({ route, navigation }) {
                     <Text style={styles.supersetBadgeText}>SUPERSET {groupLabel}</Text>
                   </View>
                 )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => moveExercise(exIdx, -1)}
+                disabled={exIdx === 0}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                style={{ padding: 4, opacity: exIdx === 0 ? 0.3 : 1 }}
+              >
+                <Ionicons name="chevron-up" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => moveExercise(exIdx, 1)}
+                disabled={exIdx === exercises.length - 1}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                style={{ padding: 4, opacity: exIdx === exercises.length - 1 ? 0.3 : 1 }}
+              >
+                <Ionicons name="chevron-down" size={20} color={COLORS.textMuted} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => deleteExercise(exIdx)}>
                 <Text style={styles.removeEx}>Remove</Text>
@@ -637,6 +658,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  exerciseCardActive: {
+    shadowColor: '#000',
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 12,
+    transform: [{ scale: 1.02 }],
+    borderColor: COLORS.accent,
   },
   supersetBorder: {
     borderLeftWidth: 4,

@@ -22,14 +22,15 @@ const DAY_MAP = { sun: 1, mon: 2, tue: 3, wed: 4, thu: 5, fri: 6, sat: 7 };
 export async function scheduleWeeklyReminders(schedule) {
   await Notifications.cancelAllScheduledNotificationsAsync();
 
-  if (!schedule?.days || !schedule?.reminderTime) return;
-
-  const [hours, minutes] = schedule.reminderTime.split(':').map(Number);
+  if (!schedule?.days) return;
 
   for (const [day, config] of Object.entries(schedule.days)) {
     if (!config.enabled) continue;
     const weekday = DAY_MAP[day];
     if (!weekday) continue;
+
+    const time = config.time || schedule.reminderTime || '07:00';
+    const [hours, minutes] = time.split(':').map(Number);
 
     const body = config.label
       ? `Time to train ${config.label}!`

@@ -33,24 +33,58 @@ function formatMonth(year, month) {
 
 const DEFAULT_SCHEDULE = {
   days: {
-    mon: { enabled: false, label: '' },
-    tue: { enabled: false, label: '' },
-    wed: { enabled: false, label: '' },
-    thu: { enabled: false, label: '' },
-    fri: { enabled: false, label: '' },
-    sat: { enabled: false, label: '' },
-    sun: { enabled: false, label: '' },
+    mon: { enabled: false, label: '', time: '07:00' },
+    tue: { enabled: false, label: '', time: '07:00' },
+    wed: { enabled: false, label: '', time: '07:00' },
+    thu: { enabled: false, label: '', time: '07:00' },
+    fri: { enabled: false, label: '', time: '07:00' },
+    sat: { enabled: false, label: '', time: '07:00' },
+    sun: { enabled: false, label: '', time: '07:00' },
   },
-  specificDates: [],
+  specificDates: {},
   reminderTime: '07:00',
 };
+
+// Normalize legacy schedule shapes: ensure days[*].time exists and
+// specificDates entries are objects { label, time } not raw strings.
+function normalizeSchedule(raw) {
+  const defaultTime = raw?.reminderTime || '07:00';
+  const days = { ...DEFAULT_SCHEDULE.days };
+  for (const k of Object.keys(days)) {
+    const cur = raw?.days?.[k];
+    if (cur) {
+      days[k] = {
+        enabled: !!cur.enabled,
+        label: cur.label || '',
+        time: cur.time || defaultTime,
+      };
+    }
+  }
+  let specificDates = {};
+  const sd = raw?.specificDates;
+  if (Array.isArray(sd)) {
+    sd.forEach(ds => { specificDates[ds] = { label: '', time: defaultTime }; });
+  } else if (sd && typeof sd === 'object') {
+    for (const [ds, val] of Object.entries(sd)) {
+      if (typeof val === 'string') specificDates[ds] = { label: val, time: defaultTime };
+      else if (val && typeof val === 'object') specificDates[ds] = { label: val.label || '', time: val.time || defaultTime };
+    }
+  }
+  return {
+    days,
+    specificDates,
+    reminderTime: defaultTime,
+    ...(raw?.updatedAt ? { updatedAt: raw.updatedAt } : {}),
+  };
+}
 
 export default function ActivityCalendarScreen({ navigation }) {
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [sessionDays, setSessionDays] = useState(new Set());
   const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [timePickerTarget, setTimePickerTarget] = useState(null); // { kind: 'day', key } | { kind: 'date', dateStr } | null
+  const [specificTimeInput, setSpecificTimeInput] = useState('07:00');
   const [editingDay, setEditingDay] = useState(null);
   const [labelInput, setLabelInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -95,7 +129,7 @@ export default function ActivityCalendarScreen({ navigation }) {
       const docRef = doc(db, 'schedules', user.uid);
       const snap = await getDoc(docRef);
       if (snap.exists()) {
-        setSchedule(snap.data());
+        setSchedule(normalizeSchedule(snap.data()));
       }
     }
     fetchSchedule();
@@ -186,13 +220,20 @@ export default function ActivityCalendarScreen({ navigation }) {
   }
 
   function toggleDay(day) {
-    setSchedule(prev => ({
-      ...prev,
-      days: {
-        ...prev.days,
-        [day]: { ...prev.days[day], enabled: !prev.days[day].enabled },
-      },
-    }));
+    setSchedule(prev => {
+      const cur = prev.days[day] || { enabled: false, label: '', time: prev.reminderTime || '07:00' };
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [day]: {
+            ...cur,
+            enabled: !cur.enabled,
+            time: cur.time || prev.reminderTime || '07:00',
+          },
+        },
+      };
+    });
   }
 
   function openLabelEdit(day) {
@@ -214,17 +255,41 @@ export default function ActivityCalendarScreen({ navigation }) {
     setLabelInput('');
   }
 
-  function handleTimeChange(event, date) {
-    if (Platform.OS === 'android') setShowTimePicker(false);
-    if (date) {
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      setSchedule(prev => ({ ...prev, reminderTime: `${hours}:${minutes}` }));
+  function handleTimeChange(_event, selected) {
+    if (Platform.OS === 'android') setTimePickerTarget(null);
+    if (!selected || !timePickerTarget) return;
+    const hh = String(selected.getHours()).padStart(2, '0');
+    const mm = String(selected.getMinutes()).padStart(2, '0');
+    const time = `${hh}:${mm}`;
+    if (timePickerTarget.kind === 'day') {
+      const k = timePickerTarget.key;
+      setSchedule(prev => ({
+        ...prev,
+        days: { ...prev.days, [k]: { ...prev.days[k], time } },
+      }));
+    } else if (timePickerTarget.kind === 'date') {
+      const ds = timePickerTarget.dateStr;
+      setSchedule(prev => {
+        const cur = prev.specificDates?.[ds];
+        const next = typeof cur === 'object' && cur ? { ...cur, time } : { label: typeof cur === 'string' ? cur : '', time };
+        return { ...prev, specificDates: { ...prev.specificDates, [ds]: next } };
+      });
+    } else if (timePickerTarget.kind === 'specificInput') {
+      setSpecificTimeInput(time);
     }
   }
 
-  function getReminderDate() {
-    const [h, m] = (schedule.reminderTime || '07:00').split(':').map(Number);
+  function getTimePickerDate() {
+    let timeStr = '07:00';
+    if (timePickerTarget?.kind === 'day') {
+      timeStr = schedule.days[timePickerTarget.key]?.time || schedule.reminderTime || '07:00';
+    } else if (timePickerTarget?.kind === 'date') {
+      const cur = schedule.specificDates?.[timePickerTarget.dateStr];
+      timeStr = (typeof cur === 'object' && cur?.time) || schedule.reminderTime || '07:00';
+    } else if (timePickerTarget?.kind === 'specificInput') {
+      timeStr = specificTimeInput;
+    }
+    const [h, m] = timeStr.split(':').map(Number);
     const d = new Date();
     d.setHours(h, m, 0, 0);
     return d;
@@ -290,18 +355,22 @@ export default function ActivityCalendarScreen({ navigation }) {
   }
 
   function startScheduleSpecificDay() {
-    setSpecificLabelInput('');
+    const dateStr = getSelectedDateStr();
+    const existing = schedule.specificDates?.[dateStr];
+    const existingTime = (typeof existing === 'object' && existing?.time) || schedule.reminderTime || '07:00';
+    const existingLabel = typeof existing === 'string' ? existing : (existing?.label || '');
+    setSpecificLabelInput(existingLabel);
+    setSpecificTimeInput(existingTime);
     setShowSpecificLabelStep(true);
   }
 
   async function confirmScheduleSpecificDay() {
     const dateStr = getSelectedDateStr();
     const oldSpecific = schedule.specificDates || {};
-    // Migrate from old array format if needed
     const specificObj = Array.isArray(oldSpecific)
-      ? oldSpecific.reduce((acc, d) => ({ ...acc, [d]: '' }), {})
+      ? oldSpecific.reduce((acc, d) => ({ ...acc, [d]: { label: '', time: schedule.reminderTime || '07:00' } }), {})
       : { ...oldSpecific };
-    specificObj[dateStr] = specificLabelInput.trim();
+    specificObj[dateStr] = { label: specificLabelInput.trim(), time: specificTimeInput };
     const updated = { ...schedule, specificDates: specificObj };
     setSchedule(updated);
     setDayModalVisible(false);
@@ -352,10 +421,13 @@ export default function ActivityCalendarScreen({ navigation }) {
       if (hasPermission) {
         await scheduleWeeklyReminders(data);
         const specific = data.specificDates || {};
-        const dateKeys = Array.isArray(specific) ? specific : Object.keys(specific);
-        for (const dateStr of dateKeys) {
-          const label = Array.isArray(specific) ? '' : (specific[dateStr] || '');
-          await scheduleDateReminder(dateStr, data.reminderTime, label);
+        const entries = Array.isArray(specific)
+          ? specific.map(d => [d, { label: '', time: data.reminderTime || '07:00' }])
+          : Object.entries(specific);
+        for (const [dateStr, entry] of entries) {
+          const time = (typeof entry === 'object' && entry?.time) || data.reminderTime || '07:00';
+          const label = (typeof entry === 'object' ? entry?.label : entry) || '';
+          await scheduleDateReminder(dateStr, time, label);
         }
       }
     } catch (_) {
@@ -477,30 +549,43 @@ export default function ActivityCalendarScreen({ navigation }) {
       </View>
       <Text style={styles.hint}>Long press a day to add a label</Text>
 
-      {/* Reminder Time */}
-      <View style={styles.reminderRow}>
-        <View style={styles.reminderLeft}>
-          <Ionicons name="notifications-outline" size={18} color={COLORS.textMuted} />
-          <Text style={styles.reminderLabel}>Remind me at</Text>
+      {/* Per-day Reminder Times */}
+      {DAYS_OF_WEEK.some(d => schedule.days[d]?.enabled) && (
+        <View style={styles.dayTimeList}>
+          <View style={styles.reminderLeft}>
+            <Ionicons name="notifications-outline" size={18} color={COLORS.textMuted} />
+            <Text style={styles.reminderLabel}>Reminders</Text>
+          </View>
+          {DAYS_OF_WEEK.filter(d => schedule.days[d]?.enabled).map(d => (
+            <View key={d} style={styles.dayTimeRow}>
+              <Text style={styles.dayTimeDay}>{DAY_LABELS[DAYS_OF_WEEK.indexOf(d)]}</Text>
+              <Text style={styles.dayTimeNote} numberOfLines={1}>
+                {schedule.days[d].label || ''}
+              </Text>
+              <TouchableOpacity
+                style={styles.timeBtn}
+                onPress={() => setTimePickerTarget({ kind: 'day', key: d })}
+              >
+                <Text style={styles.timeText}>{formatTime(schedule.days[d].time)}</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
         </View>
-        <TouchableOpacity style={styles.timeBtn} onPress={() => setShowTimePicker(true)}>
-          <Text style={styles.timeText}>{formatTime(schedule.reminderTime)}</Text>
-        </TouchableOpacity>
-      </View>
+      )}
 
-      {showTimePicker && (
+      {timePickerTarget && (
         Platform.OS === 'ios' ? (
           <Modal transparent animationType="fade">
-            <Pressable style={styles.pickerOverlay} onPress={() => setShowTimePicker(false)}>
+            <Pressable style={styles.pickerOverlay} onPress={() => setTimePickerTarget(null)}>
               <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
                 <DateTimePicker
-                  value={getReminderDate()}
+                  value={getTimePickerDate()}
                   mode="time"
                   display="spinner"
                   onChange={handleTimeChange}
                   themeVariant="dark"
                 />
-                <TouchableOpacity style={styles.pickerDone} onPress={() => setShowTimePicker(false)}>
+                <TouchableOpacity style={styles.pickerDone} onPress={() => setTimePickerTarget(null)}>
                   <Text style={styles.pickerDoneText}>Done</Text>
                 </TouchableOpacity>
               </View>
@@ -508,7 +593,7 @@ export default function ActivityCalendarScreen({ navigation }) {
           </Modal>
         ) : (
           <DateTimePicker
-            value={getReminderDate()}
+            value={getTimePickerDate()}
             mode="time"
             display="default"
             onChange={handleTimeChange}
@@ -631,6 +716,15 @@ export default function ActivityCalendarScreen({ navigation }) {
                   autoFocus
                   maxLength={25}
                 />
+                <View style={styles.specificTimeRow}>
+                  <Text style={styles.specificTimeLabel}>Reminder time</Text>
+                  <TouchableOpacity
+                    style={styles.timeBtn}
+                    onPress={() => setTimePickerTarget({ kind: 'specificInput' })}
+                  >
+                    <Text style={styles.timeText}>{formatTime(specificTimeInput)}</Text>
+                  </TouchableOpacity>
+                </View>
                 <TouchableOpacity style={styles.dayModalBtn} onPress={confirmScheduleSpecificDay}>
                   <Ionicons name="checkmark-circle-outline" size={18} color="#000" />
                   <Text style={styles.dayModalBtnText}>Confirm</Text>
@@ -726,6 +820,12 @@ const styles = StyleSheet.create({
   reminderLabel: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.regular },
   timeBtn: { backgroundColor: COLORS.background, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.border },
   timeText: { color: COLORS.accent, fontSize: 14, fontWeight: '700', fontFamily: FONTS.bold },
+  dayTimeList: { backgroundColor: COLORS.card, borderRadius: 12, padding: 14, marginBottom: 24, borderWidth: 1, borderColor: COLORS.border, gap: 8 },
+  dayTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+  dayTimeDay: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.semiBold, width: 44 },
+  dayTimeNote: { flex: 1, color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
+  specificTimeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  specificTimeLabel: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.regular },
 
   // Save
   saveBtn: { backgroundColor: COLORS.accent, borderRadius: 14, padding: 18, alignItems: 'center' },

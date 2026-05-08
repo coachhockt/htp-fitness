@@ -46,6 +46,51 @@ export function cleanupOrphanGroups(exercises) {
   });
 }
 
+// Reorder one exercise by direction (-1 up, +1 down), respecting superset groups.
+// Within a group, swaps members. At a group boundary, swaps the entire block
+// with its neighbor block (so grouped exercises never get separated).
+export function moveExerciseInList(exercises, fromIdx, dir) {
+  if (fromIdx < 0 || fromIdx >= exercises.length) return exercises;
+  const neighborIdx = fromIdx + dir;
+  if (neighborIdx < 0 || neighborIdx >= exercises.length) return exercises;
+
+  const ex = exercises[fromIdx];
+  const neighbor = exercises[neighborIdx];
+
+  if (ex.supersetGroupId && ex.supersetGroupId === neighbor.supersetGroupId) {
+    const next = [...exercises];
+    [next[fromIdx], next[neighborIdx]] = [next[neighborIdx], next[fromIdx]];
+    return next;
+  }
+
+  const blockOf = (idx) => {
+    const gid = exercises[idx].supersetGroupId;
+    if (!gid) return [idx, idx];
+    let s = idx, e = idx;
+    while (s > 0 && exercises[s - 1].supersetGroupId === gid) s--;
+    while (e < exercises.length - 1 && exercises[e + 1].supersetGroupId === gid) e++;
+    return [s, e];
+  };
+
+  const [aStart, aEnd] = blockOf(fromIdx);
+  const [bStart, bEnd] = blockOf(neighborIdx);
+
+  if (dir === 1) {
+    return [
+      ...exercises.slice(0, aStart),
+      ...exercises.slice(bStart, bEnd + 1),
+      ...exercises.slice(aStart, aEnd + 1),
+      ...exercises.slice(bEnd + 1),
+    ];
+  }
+  return [
+    ...exercises.slice(0, bStart),
+    ...exercises.slice(aStart, aEnd + 1),
+    ...exercises.slice(bStart, bEnd + 1),
+    ...exercises.slice(aEnd + 1),
+  ];
+}
+
 // For each exercise, compute the best estimated 1RM from all sets
 export function compute1RMs(exercises) {
   return exercises.map(ex => ({

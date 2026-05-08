@@ -35,12 +35,20 @@ export default function SavedWorkoutsScreen({ navigation }) {
       where('clientId', '==', user.uid),
       orderBy('createdAt', 'desc'),
     );
-    const unsub = onSnapshot(q, (snap) => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setBookmarks(all.filter(w => w.type === 'bookmark'));
-      setAssigned(all.filter(w => w.type === 'assigned'));
-      setLoading(false);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setBookmarks(all.filter(w => w.type === 'bookmark'));
+        setAssigned(all.filter(w => w.type === 'assigned'));
+        setLoading(false);
+      },
+      (err) => {
+        console.error('[SavedWorkouts]', err);
+        Alert.alert('Saved Workouts failed to load', err?.message ?? 'Unknown error');
+        setLoading(false);
+      },
+    );
     return unsub;
   }, [user.uid]);
 
