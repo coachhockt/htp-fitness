@@ -4,6 +4,12 @@
     "slug": "htp-fitness",
     "scheme": "htp-fitness",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/239c2585-a100-4712-aa9b-ecc2199f0d5c"
+    },
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
