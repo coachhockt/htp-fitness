@@ -91,6 +91,26 @@ export function moveExerciseInList(exercises, fromIdx, dir) {
   ];
 }
 
+export function getLastBodyEditDate(obj, kind) {
+  if (!obj) return null;
+  const explicitField = kind === 'weight' ? 'weightUpdatedAt' : 'fatUpdatedAt';
+  const valueField = kind === 'weight' ? 'bodyWeight' : 'bodyFat';
+  if (obj[explicitField]) return obj[explicitField];
+  if (obj.bodyUpdatedAt) return obj.bodyUpdatedAt;
+  const history = Array.isArray(obj.bodyHistory) ? obj.bodyHistory : [];
+  const matching = history
+    .filter(e => e && e[valueField] != null && e.date)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  return matching.length > 0 ? matching[0].date : null;
+}
+
+export function formatLastEdited(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `Last edited: ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
 // For each exercise, compute the best estimated 1RM from all sets
 export function compute1RMs(exercises) {
   return exercises.map(ex => ({

@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
+import { getLastBodyEditDate, formatLastEdited } from '../utils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PAGE_SIZE = 10;
@@ -304,6 +305,35 @@ export default function ClientDetailScreen({ route, navigation }) {
                   <Text style={styles.editBtnText}>Edit</Text>
                 </TouchableOpacity>
               </View>
+              {(() => {
+                const wDate = getLastBodyEditDate(client, 'weight');
+                const fDate = getLastBodyEditDate(client, 'fat');
+                const showW = client?.bodyWeight != null || wDate;
+                const showF = client?.bodyFat != null || fDate;
+                if (!showW && !showF) return null;
+                return (
+                  <View style={styles.bodyStatsRow}>
+                    {showW && (
+                      <View style={styles.bodyStat}>
+                        <Text style={styles.bodyStatLabel}>Body Weight</Text>
+                        <Text style={styles.bodyStatValue}>
+                          {client?.bodyWeight != null ? `${client.bodyWeight} lbs` : '—'}
+                        </Text>
+                        {wDate && <Text style={styles.bodyStatSub}>{formatLastEdited(wDate)}</Text>}
+                      </View>
+                    )}
+                    {showF && (
+                      <View style={styles.bodyStat}>
+                        <Text style={styles.bodyStatLabel}>Body Fat</Text>
+                        <Text style={styles.bodyStatValue}>
+                          {client?.bodyFat != null ? `${client.bodyFat}%` : '—'}
+                        </Text>
+                        {fDate && <Text style={styles.bodyStatSub}>{formatLastEdited(fDate)}</Text>}
+                      </View>
+                    )}
+                  </View>
+                );
+              })()}
               {client?.note ? (
                 <View style={styles.noteBox}>
                   <Text style={styles.noteLabel}>Notes</Text>
@@ -540,11 +570,11 @@ export default function ClientDetailScreen({ route, navigation }) {
               keyboardType="number-pad"
             />
             <Text style={styles.fieldLabel}>Body Weight (lbs)</Text>
-            {(client?.weightUpdatedAt || client?.bodyUpdatedAt) && (
+            {formatLastEdited(getLastBodyEditDate(client, 'weight')) ? (
               <Text style={styles.lastUpdated}>
-                Last updated: {new Date(client.weightUpdatedAt || client.bodyUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {formatLastEdited(getLastBodyEditDate(client, 'weight'))}
               </Text>
-            )}
+            ) : null}
             <TextInput
               style={styles.input}
               placeholder="Enter weight"
@@ -554,11 +584,11 @@ export default function ClientDetailScreen({ route, navigation }) {
               keyboardType="decimal-pad"
             />
             <Text style={styles.fieldLabel}>Body Fat %</Text>
-            {(client?.fatUpdatedAt || client?.bodyUpdatedAt) && (
+            {formatLastEdited(getLastBodyEditDate(client, 'fat')) ? (
               <Text style={styles.lastUpdated}>
-                Last updated: {new Date(client.fatUpdatedAt || client.bodyUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {formatLastEdited(getLastBodyEditDate(client, 'fat'))}
               </Text>
-            )}
+            ) : null}
             <TextInput
               style={styles.input}
               placeholder="Enter body fat"
@@ -716,6 +746,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   editBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 13, fontFamily: FONTS.bold },
+  bodyStatsRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: COLORS.border,
+    gap: 16,
+  },
+  bodyStat: { flex: 1 },
+  bodyStatLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
+  bodyStatValue: { color: COLORS.text, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold },
+  bodyStatSub: { color: COLORS.textMuted, fontSize: 11, marginTop: 2, fontFamily: FONTS.regular },
   noteBox: {
     marginTop: 12,
     paddingTop: 12,

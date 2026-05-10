@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
+import { getLastBodyEditDate, formatLastEdited } from '../utils';
 import ProfileMenu from '../components/ProfileMenu';
 
 export default function UserDashboardScreen({ navigation }) {
@@ -284,11 +285,21 @@ export default function UserDashboardScreen({ navigation }) {
             </View>
             <View style={styles.profileRow}>
               <Text style={styles.profileLabel}>Body Weight</Text>
-              <Text style={styles.profileValue}>{profile.bodyWeight ? `${profile.bodyWeight} lbs` : '—'}</Text>
+              <View style={styles.profileValueCol}>
+                <Text style={styles.profileValue}>{profile.bodyWeight ? `${profile.bodyWeight} lbs` : '—'}</Text>
+                {getLastBodyEditDate(profile, 'weight') && (
+                  <Text style={styles.profileSub}>{formatLastEdited(getLastBodyEditDate(profile, 'weight'))}</Text>
+                )}
+              </View>
             </View>
             <View style={styles.profileRow}>
               <Text style={styles.profileLabel}>Body Fat</Text>
-              <Text style={styles.profileValue}>{profile.bodyFat ? `${profile.bodyFat}%` : '—'}</Text>
+              <View style={styles.profileValueCol}>
+                <Text style={styles.profileValue}>{profile.bodyFat ? `${profile.bodyFat}%` : '—'}</Text>
+                {getLastBodyEditDate(profile, 'fat') && (
+                  <Text style={styles.profileSub}>{formatLastEdited(getLastBodyEditDate(profile, 'fat'))}</Text>
+                )}
+              </View>
             </View>
 
             <TouchableOpacity style={styles.modalBtn} onPress={openEditProfile}>
@@ -353,11 +364,11 @@ export default function UserDashboardScreen({ navigation }) {
               ))}
             </View>
             <Text style={styles.fieldLabel}>Body Weight (lbs)</Text>
-            {(profile.weightUpdatedAt || profile.bodyUpdatedAt) && (
+            {formatLastEdited(getLastBodyEditDate(profile, 'weight')) ? (
               <Text style={styles.lastUpdated}>
-                Last updated: {new Date(profile.weightUpdatedAt || profile.bodyUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {formatLastEdited(getLastBodyEditDate(profile, 'weight'))}
               </Text>
-            )}
+            ) : null}
             <TextInput
               style={styles.input}
               placeholder="Enter weight"
@@ -367,11 +378,11 @@ export default function UserDashboardScreen({ navigation }) {
               keyboardType="decimal-pad"
             />
             <Text style={styles.fieldLabel}>Body Fat %</Text>
-            {(profile.fatUpdatedAt || profile.bodyUpdatedAt) && (
+            {formatLastEdited(getLastBodyEditDate(profile, 'fat')) ? (
               <Text style={styles.lastUpdated}>
-                Last updated: {new Date(profile.fatUpdatedAt || profile.bodyUpdatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {formatLastEdited(getLastBodyEditDate(profile, 'fat'))}
               </Text>
-            )}
+            ) : null}
             <TextInput
               style={styles.input}
               placeholder="Enter body fat"
@@ -590,6 +601,15 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontFamily: FONTS.semiBold,
+  },
+  profileValueCol: {
+    alignItems: 'flex-end',
+  },
+  profileSub: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontFamily: FONTS.regular,
+    marginTop: 2,
   },
 
   centerBackdrop: {

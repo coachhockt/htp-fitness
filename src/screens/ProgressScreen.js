@@ -398,14 +398,23 @@ export default function ProgressScreen({ route, navigation }) {
             bezier
             style={styles.chart}
           />
-          <Text style={[styles.delta, { color: '#D4872A' }]}>
-            {(() => {
-              const diff = points[points.length - 1].best1RM - points[0].best1RM;
-              if (diff > 0) return `+${diff} lbs since first session`;
-              if (diff < 0) return `${diff} lbs since first session`;
-              return 'Same as first session';
-            })()}
-          </Text>
+          <View style={styles.chartFooter}>
+            <Text style={styles.mostRecent}>
+              <Text style={{ fontWeight: '600' }}>Most recent: </Text>
+              {points[points.length - 1].best1RM} lbs
+              <Text style={{ fontWeight: '400' }}>
+                {`  ·  ${points[points.length - 1].date.getMonth() + 1}/${points[points.length - 1].date.getDate()}/${String(points[points.length - 1].date.getFullYear()).slice(-2)}`}
+              </Text>
+            </Text>
+            <Text style={[styles.delta, { color: '#D4872A', marginTop: 0 }]}>
+              {(() => {
+                const diff = points[points.length - 1].best1RM - points[0].best1RM;
+                if (diff > 0) return `+${diff} lbs since first session`;
+                if (diff < 0) return `${diff} lbs since first session`;
+                return 'Same as first session';
+              })()}
+            </Text>
+          </View>
         </TouchableOpacity>
       )}
 
@@ -560,6 +569,8 @@ const styles = StyleSheet.create({
   chartSubtitle: { color: COLORS.textMuted, fontSize: 11, marginBottom: 14, fontFamily: FONTS.regular },
   chart: { borderRadius: 10 },
   delta: { color: COLORS.accent, fontSize: 13, fontWeight: '600', marginTop: 10, textAlign: 'right', fontFamily: FONTS.semiBold },
+  chartFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 8 },
+  mostRecent: { color: '#D4872A', fontSize: 13, fontWeight: '700', fontFamily: FONTS.bold, flexShrink: 1 },
   statsCard: {
     backgroundColor: COLORS.card,
     borderRadius: 14,
