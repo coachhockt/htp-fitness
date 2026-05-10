@@ -21,7 +21,7 @@
     "production": {
       "channel": "production",
       "node": "22.20.0",
-      "autoIncrement": "buildNumber"
+      "autoIncrement": true
     }
   },
   "submit": {
