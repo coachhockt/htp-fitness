@@ -104,6 +104,20 @@ export function getLastBodyEditDate(obj, kind) {
   return matching.length > 0 ? matching[0].date : null;
 }
 
+// Returns the current sessions-remaining balance for a client.
+// Prefers the explicit sessionsRemaining field; falls back to legacy
+// sessionsPurchased - logged - manualDeductions when not yet migrated.
+// Returns null if neither field is set.
+export function getSessionsRemaining(client, loggedSessionCount) {
+  if (typeof client?.sessionsRemaining === 'number') {
+    return client.sessionsRemaining;
+  }
+  if (typeof client?.sessionsPurchased === 'number') {
+    return client.sessionsPurchased - (loggedSessionCount || 0) - (client.manualDeductions || 0);
+  }
+  return null;
+}
+
 export function formatLastEdited(iso) {
   if (!iso) return '';
   const d = new Date(iso);

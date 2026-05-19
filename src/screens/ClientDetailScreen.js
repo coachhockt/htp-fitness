@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { getLastBodyEditDate, formatLastEdited } from '../utils';
+import { getLastBodyEditDate, formatLastEdited, getSessionsRemaining } from '../utils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PAGE_SIZE = 10;
@@ -45,6 +45,14 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [sessionsModal, setSessionsModal] = useState(false);
   const [sessionsInput, setSessionsInput] = useState('');
   const [sessionsSaving, setSessionsSaving] = useState(false);
+  const [purchaseModal, setPurchaseModal] = useState(false);
+  const [purchaseDate, setPurchaseDate] = useState(new Date());
+  const [showPurchaseDatePicker, setShowPurchaseDatePicker] = useState(false);
+  const [purchaseSessions, setPurchaseSessions] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState('');
+  const [purchaseSaving, setPurchaseSaving] = useState(false);
+  const [historyModal, setHistoryModal] = useState(false);
+  const [editingPurchaseIndex, setEditingPurchaseIndex] = useState(null);
 
   useEffect(() => {
     getDoc(doc(db, 'clients', clientId)).then(d => {
@@ -209,9 +217,9 @@ export default function ClientDetailScreen({ route, navigation }) {
   }
 
   function confirmAndNotify(method) {
-    const purchased = client?.sessionsPurchased;
-    if (typeof purchased !== 'number') {
-      Alert.alert('No Sessions Set', 'Set sessions purchased first.');
+    const currentRemaining = getSessionsRemaining(client, sessions.length);
+    if (typeof currentRemaining !== 'number') {
+      Alert.alert('No Sessions Set', 'Log a purchase or set remaining first.');
       return;
     }
     if (method === 'sms' && !client?.phone) {
@@ -222,8 +230,6 @@ export default function ClientDetailScreen({ route, navigation }) {
       Alert.alert('No Email', 'Add an email for this client first.');
       return;
     }
-    const used = sessions.length + (client.manualDeductions || 0);
-    const currentRemaining = purchased - used;
     Alert.alert(
       'Deduct 1 Session?',
       `This will deduct 1 session from ${client.name}'s remaining count and send a message with the new total.`,
@@ -238,8 +244,14 @@ export default function ClientDetailScreen({ route, navigation }) {
               await updateDoc(doc(db, 'clients', clientId), {
                 manualDeductions: newDeductions,
                 manualDeductionsUpdatedAt: new Date().toISOString(),
+                sessionsRemaining: newRemaining,
+                sessionsRemainingUpdatedAt: new Date().toISOString(),
               });
-              setClient(prev => ({ ...prev, manualDeductions: newDeductions }));
+              setClient(prev => ({
+                ...prev,
+                manualDeductions: newDeductions,
+                sessionsRemaining: newRemaining,
+              }));
               await sendNotification(method, newRemaining);
             } catch (e) {
               Alert.alert('Error', e.message);
@@ -281,11 +293,12 @@ export default function ClientDetailScreen({ route, navigation }) {
   }
 
   function openSessionsModal() {
-    setSessionsInput(client?.sessionsPurchased != null ? String(client.sessionsPurchased) : '');
+    const current = getSessionsRemaining(client, sessions.length);
+    setSessionsInput(typeof current === 'number' ? String(current) : '');
     setSessionsModal(true);
   }
 
-  async function saveSessionsPurchased() {
+  async function saveSessionsRemaining() {
     const raw = sessionsInput.trim();
     if (raw === '') {
       Alert.alert('Error', 'Enter a number of sessions.');
@@ -293,21 +306,127 @@ export default function ClientDetailScreen({ route, navigation }) {
     }
     const n = parseInt(raw, 10);
     if (isNaN(n) || n < 0) {
-      Alert.alert('Error', 'Sessions purchased must be a non-negative whole number.');
+      Alert.alert('Error', 'Sessions remaining must be a non-negative whole number.');
       return;
     }
     setSessionsSaving(true);
     try {
       await updateDoc(doc(db, 'clients', clientId), {
-        sessionsPurchased: n,
-        sessionsPurchasedUpdatedAt: new Date().toISOString(),
+        sessionsRemaining: n,
+        sessionsRemainingUpdatedAt: new Date().toISOString(),
       });
-      setClient(prev => ({ ...prev, sessionsPurchased: n }));
+      setClient(prev => ({ ...prev, sessionsRemaining: n }));
       setSessionsModal(false);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
       setSessionsSaving(false);
+    }
+  }
+
+  function openPurchaseModal() {
+    setEditingPurchaseIndex(null);
+    setPurchaseDate(new Date());
+    setPurchaseSessions('');
+    setPurchasePrice('');
+    setPurchaseModal(true);
+  }
+
+  function openEditPurchaseModal(index) {
+    const p = client?.purchases?.[index];
+    if (!p) return;
+    setEditingPurchaseIndex(index);
+    const d = new Date(p.date);
+    setPurchaseDate(isNaN(d.getTime()) ? new Date() : d);
+    setPurchaseSessions(p.sessions != null ? String(p.sessions) : '');
+    setPurchasePrice(p.pricePerSession != null ? String(p.pricePerSession) : '');
+    setHistoryModal(false);
+    setPurchaseModal(true);
+  }
+
+  async function savePurchase() {
+    const sessionsCount = parseInt(purchaseSessions.trim(), 10);
+    if (isNaN(sessionsCount) || sessionsCount <= 0) {
+      Alert.alert('Error', 'Enter a valid number of sessions.');
+      return;
+    }
+    const price = parseFloat(purchasePrice.trim());
+    if (isNaN(price) || price < 0) {
+      Alert.alert('Error', 'Enter a valid price per session.');
+      return;
+    }
+    setPurchaseSaving(true);
+    try {
+      const currentRemaining = getSessionsRemaining(client, sessions.length) || 0;
+      let newPurchases, newRemaining;
+      if (editingPurchaseIndex === null) {
+        const entry = {
+          date: purchaseDate.toISOString(),
+          sessions: sessionsCount,
+          pricePerSession: price,
+          createdAt: new Date().toISOString(),
+        };
+        newPurchases = [...(client.purchases || []), entry];
+        newRemaining = currentRemaining + sessionsCount;
+      } else {
+        const old = client.purchases[editingPurchaseIndex];
+        const entry = {
+          date: purchaseDate.toISOString(),
+          sessions: sessionsCount,
+          pricePerSession: price,
+          createdAt: old?.createdAt || new Date().toISOString(),
+        };
+        newPurchases = client.purchases.map((p, i) => i === editingPurchaseIndex ? entry : p);
+        newRemaining = currentRemaining + (sessionsCount - (old?.sessions || 0));
+      }
+      await updateDoc(doc(db, 'clients', clientId), {
+        purchases: newPurchases,
+        sessionsRemaining: newRemaining,
+        sessionsRemainingUpdatedAt: new Date().toISOString(),
+      });
+      setClient(prev => ({ ...prev, purchases: newPurchases, sessionsRemaining: newRemaining }));
+      setPurchaseModal(false);
+      setEditingPurchaseIndex(null);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setPurchaseSaving(false);
+    }
+  }
+
+  function confirmDeletePurchase(index) {
+    const p = client?.purchases?.[index];
+    if (!p) return;
+    const d = new Date(p.date);
+    const dateStr = isNaN(d.getTime())
+      ? ''
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const summary = `${dateStr ? dateStr + ' · ' : ''}${p.sessions} session${p.sessions !== 1 ? 's' : ''} @ $${p.pricePerSession}`;
+    Alert.alert(
+      'Delete Purchase?',
+      summary,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deletePurchase(index) },
+      ]
+    );
+  }
+
+  async function deletePurchase(index) {
+    const old = client?.purchases?.[index];
+    if (!old) return;
+    try {
+      const newPurchases = client.purchases.filter((_, i) => i !== index);
+      const currentRemaining = getSessionsRemaining(client, sessions.length) || 0;
+      const newRemaining = currentRemaining - (old.sessions || 0);
+      await updateDoc(doc(db, 'clients', clientId), {
+        purchases: newPurchases,
+        sessionsRemaining: newRemaining,
+        sessionsRemainingUpdatedAt: new Date().toISOString(),
+      });
+      setClient(prev => ({ ...prev, purchases: newPurchases, sessionsRemaining: newRemaining }));
+    } catch (e) {
+      Alert.alert('Error', e.message);
     }
   }
 
@@ -450,43 +569,48 @@ export default function ClientDetailScreen({ route, navigation }) {
                 </View>
               ) : null}
               {(() => {
-                const purchased = client?.sessionsPurchased;
                 const used = sessions.length + (client?.manualDeductions || 0);
-                const hasPurchased = typeof purchased === 'number';
-                const remaining = hasPurchased ? purchased - used : null;
+                const remaining = getSessionsRemaining(client, sessions.length);
+                const hasRemaining = typeof remaining === 'number';
                 return (
                   <View style={styles.sessionsBox}>
                     <View style={styles.sessionsHeader}>
                       <Text style={styles.noteLabel}>Training Sessions</Text>
                       <TouchableOpacity onPress={openSessionsModal} style={styles.sessionsEditBtn}>
                         <Text style={styles.sessionsEditBtnText}>
-                          {hasPurchased ? 'Edit' : '+ Add'}
+                          {hasRemaining ? 'Edit' : '+ Add'}
                         </Text>
                       </TouchableOpacity>
                     </View>
                     <View style={styles.sessionsStatsRow}>
                       <View style={styles.sessionsStat}>
-                        <Text style={styles.sessionsStatValue}>
-                          {hasPurchased ? purchased : '—'}
+                        <Text style={[
+                          styles.sessionsStatValue,
+                          hasRemaining && remaining <= 0 && { color: COLORS.danger },
+                          hasRemaining && remaining > 0 && remaining <= 2 && { color: '#FF9800' },
+                        ]}>
+                          {hasRemaining ? remaining : '—'}
                         </Text>
-                        <Text style={styles.sessionsStatLabel}>Purchased</Text>
+                        <Text style={styles.sessionsStatLabel}>Remaining</Text>
                       </View>
                       <View style={styles.sessionsStat}>
                         <Text style={styles.sessionsStatValue}>{used}</Text>
                         <Text style={styles.sessionsStatLabel}>Used</Text>
                       </View>
-                      <View style={styles.sessionsStat}>
-                        <Text style={[
-                          styles.sessionsStatValue,
-                          hasPurchased && remaining <= 0 && { color: COLORS.danger },
-                          hasPurchased && remaining > 0 && remaining <= 2 && { color: '#FF9800' },
-                        ]}>
-                          {hasPurchased ? remaining : '—'}
-                        </Text>
-                        <Text style={styles.sessionsStatLabel}>Remaining</Text>
-                      </View>
                     </View>
-                    {hasPurchased && (client?.phone || client?.email) ? (
+                    <View style={styles.purchaseBtnRow}>
+                      <TouchableOpacity style={styles.logPurchaseBtn} onPress={openPurchaseModal}>
+                        <Ionicons name="add-circle-outline" size={16} color={COLORS.accent} />
+                        <Text style={styles.logPurchaseBtnText}>Log Purchase</Text>
+                      </TouchableOpacity>
+                      {client?.purchases?.length > 0 ? (
+                        <TouchableOpacity style={styles.viewHistoryBtn} onPress={() => setHistoryModal(true)}>
+                          <Ionicons name="time-outline" size={16} color={COLORS.text} />
+                          <Text style={styles.viewHistoryBtnText}>View Purchases</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                    {hasRemaining && (client?.phone || client?.email) ? (
                       <View style={styles.notifyRow}>
                         {client?.phone ? (
                           <TouchableOpacity style={styles.notifyBtn} onPress={() => confirmAndNotify('sms')}>
@@ -791,18 +915,18 @@ export default function ClientDetailScreen({ route, navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Sessions Purchased Modal */}
+      {/* Edit Sessions Remaining Modal */}
       <Modal visible={sessionsModal} transparent animationType="fade" onRequestClose={() => setSessionsModal(false)}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <Pressable style={styles.centerBackdrop} onPress={() => setSessionsModal(false)}>
             <Pressable style={styles.sessionsModalContent} onPress={() => {}}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Training Sessions</Text>
+                <Text style={styles.modalTitle}>Edit Remaining</Text>
                 <TouchableOpacity onPress={() => setSessionsModal(false)} style={styles.closeBtn}>
                   <Text style={styles.closeBtnText}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.fieldLabel}>Total Sessions Purchased</Text>
+              <Text style={styles.fieldLabel}>Sessions Remaining</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. 10"
@@ -813,19 +937,11 @@ export default function ClientDetailScreen({ route, navigation }) {
                 autoFocus
               />
               <Text style={styles.sessionsHint}>
-                {sessions.length} session{sessions.length !== 1 ? 's' : ''} already logged.
-                {(() => {
-                  const n = parseInt(sessionsInput, 10);
-                  if (!isNaN(n) && n >= 0) {
-                    const r = n - sessions.length;
-                    return ` Remaining will be ${r}.`;
-                  }
-                  return '';
-                })()}
+                Use Log Purchase to add new sessions. This sets the remaining count directly.
               </Text>
               <TouchableOpacity
                 style={styles.modalBtn}
-                onPress={saveSessionsPurchased}
+                onPress={saveSessionsRemaining}
                 disabled={sessionsSaving}
               >
                 <Text style={styles.modalBtnText}>{sessionsSaving ? 'Saving...' : 'Save'}</Text>
@@ -833,6 +949,153 @@ export default function ClientDetailScreen({ route, navigation }) {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Log Purchase Modal */}
+      <Modal visible={purchaseModal} transparent animationType="fade" onRequestClose={() => { setPurchaseModal(false); setEditingPurchaseIndex(null); }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.centerBackdrop} onPress={() => { setPurchaseModal(false); setEditingPurchaseIndex(null); }}>
+            <Pressable style={styles.sessionsModalContent} onPress={() => {}}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{editingPurchaseIndex === null ? 'Log Purchase' : 'Edit Purchase'}</Text>
+                <TouchableOpacity onPress={() => { setPurchaseModal(false); setEditingPurchaseIndex(null); }} style={styles.closeBtn}>
+                  <Text style={styles.closeBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.fieldLabel}>Date</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setShowPurchaseDatePicker(true)}>
+                <Text style={{ color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular }}>
+                  {purchaseDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              </TouchableOpacity>
+              {showPurchaseDatePicker && (
+                Platform.OS === 'ios' ? (
+                  <Modal transparent animationType="fade">
+                    <Pressable style={styles.pickerOverlay} onPress={() => setShowPurchaseDatePicker(false)}>
+                      <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
+                        <DateTimePicker
+                          maximumDate={new Date()}
+                          value={purchaseDate}
+                          mode="date"
+                          display="inline"
+                          onChange={(event, date) => {
+                            if (date) setPurchaseDate(date);
+                          }}
+                          themeVariant="dark"
+                        />
+                        <TouchableOpacity style={styles.pickerDone} onPress={() => setShowPurchaseDatePicker(false)}>
+                          <Text style={styles.pickerDoneText}>Done</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </Pressable>
+                  </Modal>
+                ) : (
+                  <DateTimePicker
+                    maximumDate={new Date()}
+                    value={purchaseDate}
+                    mode="date"
+                    display="default"
+                    onChange={(event, date) => {
+                      setShowPurchaseDatePicker(false);
+                      if (date) setPurchaseDate(date);
+                    }}
+                  />
+                )
+              )}
+              <Text style={styles.fieldLabel}>Number of Sessions</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 10"
+                placeholderTextColor={COLORS.textMuted}
+                value={purchaseSessions}
+                onChangeText={setPurchaseSessions}
+                keyboardType="number-pad"
+              />
+              <Text style={styles.fieldLabel}>Price per Session ($)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 80"
+                placeholderTextColor={COLORS.textMuted}
+                value={purchasePrice}
+                onChangeText={setPurchasePrice}
+                keyboardType="decimal-pad"
+              />
+              {(() => {
+                const s = parseInt(purchaseSessions, 10);
+                const p = parseFloat(purchasePrice);
+                if (!isNaN(s) && !isNaN(p) && s > 0 && p >= 0) {
+                  return (
+                    <Text style={styles.sessionsHint}>Total: ${(s * p).toFixed(2)}</Text>
+                  );
+                }
+                return null;
+              })()}
+              <TouchableOpacity
+                style={styles.modalBtn}
+                onPress={savePurchase}
+                disabled={purchaseSaving}
+              >
+                <Text style={styles.modalBtnText}>
+                  {purchaseSaving
+                    ? 'Saving...'
+                    : editingPurchaseIndex === null ? 'Save Purchase' : 'Save Changes'}
+                </Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Purchase History Modal */}
+      <Modal visible={historyModal} transparent animationType="fade" onRequestClose={() => setHistoryModal(false)}>
+        <Pressable style={styles.centerBackdrop} onPress={() => setHistoryModal(false)}>
+          <Pressable style={styles.historyModalContent} onPress={() => {}}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Purchase History</Text>
+              <TouchableOpacity onPress={() => setHistoryModal(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {(client?.purchases || [])
+                .map((p, i) => ({ ...p, _originalIndex: i }))
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .map((p) => {
+                  const d = new Date(p.date);
+                  const dateStr = isNaN(d.getTime())
+                    ? '—'
+                    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  const total = (p.sessions || 0) * (p.pricePerSession || 0);
+                  return (
+                    <View key={p._originalIndex} style={styles.historyRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.purchaseDate}>{dateStr}</Text>
+                        <Text style={styles.purchaseMeta}>
+                          {p.sessions} session{p.sessions !== 1 ? 's' : ''} @ ${p.pricePerSession} = ${total}
+                        </Text>
+                      </View>
+                      <View style={styles.purchaseRowActions}>
+                        <TouchableOpacity
+                          style={styles.purchaseActionBtn}
+                          onPress={() => openEditPurchaseModal(p._originalIndex)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="pencil-outline" size={18} color={COLORS.accent} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.purchaseActionBtn}
+                          onPress={() => confirmDeletePurchase(p._originalIndex)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Assign Workout Modal */}
@@ -1038,6 +1301,80 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: 4,
     fontFamily: FONTS.bold,
+  },
+  purchaseBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  logPurchaseBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accent + '22',
+  },
+  logPurchaseBtnText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontFamily: FONTS.bold,
+  },
+  viewHistoryBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  viewHistoryBtnText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontFamily: FONTS.semiBold,
+  },
+  historyModalContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 480,
+    maxHeight: '80%',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+  },
+  purchaseDate: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: FONTS.semiBold,
+  },
+  purchaseMeta: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    marginTop: 3,
+    fontFamily: FONTS.regular,
+  },
+  purchaseRowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginLeft: 12,
+  },
+  purchaseActionBtn: {
+    padding: 4,
   },
   notifyRow: {
     flexDirection: 'row',

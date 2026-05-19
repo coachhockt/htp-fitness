@@ -9,6 +9,7 @@ import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, del
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
+import { getSessionsRemaining } from '../utils';
 import ProfileMenu from '../components/ProfileMenu';
 
 export default function ClientsScreen({ navigation }) {
@@ -152,9 +153,20 @@ export default function ClientsScreen({ navigation }) {
               <Text style={styles.name}>
                 {item.name}{item.age ? `, ${item.age}` : ''}
               </Text>
-              <Text style={styles.sessionCount}>
-                {sessionCounts[item.id] || 0} session{(sessionCounts[item.id] || 0) !== 1 ? 's' : ''} logged
-              </Text>
+              {(() => {
+                const remaining = getSessionsRemaining(item, sessionCounts[item.id] || 0);
+                if (typeof remaining !== 'number') return null;
+                const color = remaining <= 0
+                  ? COLORS.danger
+                  : remaining <= 2
+                    ? '#FF9800'
+                    : COLORS.textMuted;
+                return (
+                  <Text style={[styles.sessionCount, { color }]}>
+                    {remaining} session{remaining !== 1 ? 's' : ''} left
+                  </Text>
+                );
+              })()}
             </View>
             <TouchableOpacity
               style={styles.deleteBtn}
