@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
   Modal, Pressable, TextInput, KeyboardAvoidingView, Platform,
-  Keyboard, TouchableWithoutFeedback, ScrollView,
+  Keyboard, TouchableWithoutFeedback, ScrollView, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
@@ -32,6 +32,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [editFirst, setEditFirst] = useState('');
   const [editLast, setEditLast] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editAge, setEditAge] = useState('');
   const [editWeight, setEditWeight] = useState('');
   const [editFat, setEditFat] = useState('');
@@ -41,6 +42,9 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [assignNote, setAssignNote] = useState('');
   const [assignExercises, setAssignExercises] = useState([{ name: '', sets: [{ weight: '', reps: '' }] }]);
   const [assignSaving, setAssignSaving] = useState(false);
+  const [sessionsModal, setSessionsModal] = useState(false);
+  const [sessionsInput, setSessionsInput] = useState('');
+  const [sessionsSaving, setSessionsSaving] = useState(false);
 
   useEffect(() => {
     getDoc(doc(db, 'clients', clientId)).then(d => {
@@ -140,6 +144,7 @@ export default function ClientDetailScreen({ route, navigation }) {
     setEditFirst(client.firstName || client.name?.split(' ')[0] || '');
     setEditLast(client.lastName || client.name?.split(' ').slice(1).join(' ') || '');
     setEditPhone(client.phone || '');
+    setEditEmail(client.email || '');
     setEditAge(client.age ? String(client.age) : '');
     setEditWeight(client.bodyWeight ? String(client.bodyWeight) : '');
     setEditFat(client.bodyFat ? String(client.bodyFat) : '');
@@ -170,6 +175,7 @@ export default function ClientDetailScreen({ route, navigation }) {
       lastName: editLast.trim() || null,
       name: fullName,
       phone: editPhone.trim(),
+      email: editEmail.trim() || null,
       age: editAge.trim() ? parseInt(editAge.trim()) : null,
       bodyWeight: newWeight,
       bodyFat: newFat,
@@ -200,6 +206,109 @@ export default function ClientDetailScreen({ route, navigation }) {
     setClient(prev => ({ ...prev, ...updated }));
     navigation.setOptions({ title: updated.name });
     setEditModal(false);
+  }
+
+  function confirmAndNotify(method) {
+    const purchased = client?.sessionsPurchased;
+    if (typeof purchased !== 'number') {
+      Alert.alert('No Sessions Set', 'Set sessions purchased first.');
+      return;
+    }
+    if (method === 'sms' && !client?.phone) {
+      Alert.alert('No Phone Number', 'Add a phone number for this client first.');
+      return;
+    }
+    if (method === 'email' && !client?.email) {
+      Alert.alert('No Email', 'Add an email for this client first.');
+      return;
+    }
+    const used = sessions.length + (client.manualDeductions || 0);
+    const currentRemaining = purchased - used;
+    Alert.alert(
+      'Deduct 1 Session?',
+      `This will deduct 1 session from ${client.name}'s remaining count and send a message with the new total.`,
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes',
+          onPress: async () => {
+            const newDeductions = (client.manualDeductions || 0) + 1;
+            const newRemaining = currentRemaining - 1;
+            try {
+              await updateDoc(doc(db, 'clients', clientId), {
+                manualDeductions: newDeductions,
+                manualDeductionsUpdatedAt: new Date().toISOString(),
+              });
+              setClient(prev => ({ ...prev, manualDeductions: newDeductions }));
+              await sendNotification(method, newRemaining);
+            } catch (e) {
+              Alert.alert('Error', e.message);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function sendNotification(method, remaining) {
+    const firstName = client.firstName || client.name?.split(' ')[0] || 'there';
+    const plural = remaining === 1 ? 'session' : 'sessions';
+    const body = `Hi ${firstName}, Awesome Work today! You have ${remaining} training ${plural} left.`;
+    let url;
+    if (method === 'sms') {
+      const phone = client.phone.replace(/[^0-9+]/g, '');
+      const sep = Platform.OS === 'ios' ? '&' : '?';
+      url = `sms:${phone}${sep}body=${encodeURIComponent(body)}`;
+    } else {
+      const subject = 'Training Sessions Update';
+      url = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    }
+    try {
+      const ok = await Linking.canOpenURL(url);
+      if (!ok) {
+        Alert.alert(
+          'Cannot Open',
+          method === 'sms'
+            ? 'This device cannot send text messages.'
+            : 'No email app is set up on this device.'
+        );
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  }
+
+  function openSessionsModal() {
+    setSessionsInput(client?.sessionsPurchased != null ? String(client.sessionsPurchased) : '');
+    setSessionsModal(true);
+  }
+
+  async function saveSessionsPurchased() {
+    const raw = sessionsInput.trim();
+    if (raw === '') {
+      Alert.alert('Error', 'Enter a number of sessions.');
+      return;
+    }
+    const n = parseInt(raw, 10);
+    if (isNaN(n) || n < 0) {
+      Alert.alert('Error', 'Sessions purchased must be a non-negative whole number.');
+      return;
+    }
+    setSessionsSaving(true);
+    try {
+      await updateDoc(doc(db, 'clients', clientId), {
+        sessionsPurchased: n,
+        sessionsPurchasedUpdatedAt: new Date().toISOString(),
+      });
+      setClient(prev => ({ ...prev, sessionsPurchased: n }));
+      setSessionsModal(false);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSessionsSaving(false);
+    }
   }
 
   function openAssignModal() {
@@ -340,9 +449,62 @@ export default function ClientDetailScreen({ route, navigation }) {
                   <Text style={styles.noteText}>{client.note}</Text>
                 </View>
               ) : null}
-              <Text style={styles.sessionCount}>
-                {sessions.length} session{sessions.length !== 1 ? 's' : ''} logged
-              </Text>
+              {(() => {
+                const purchased = client?.sessionsPurchased;
+                const used = sessions.length + (client?.manualDeductions || 0);
+                const hasPurchased = typeof purchased === 'number';
+                const remaining = hasPurchased ? purchased - used : null;
+                return (
+                  <View style={styles.sessionsBox}>
+                    <View style={styles.sessionsHeader}>
+                      <Text style={styles.noteLabel}>Training Sessions</Text>
+                      <TouchableOpacity onPress={openSessionsModal} style={styles.sessionsEditBtn}>
+                        <Text style={styles.sessionsEditBtnText}>
+                          {hasPurchased ? 'Edit' : '+ Add'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.sessionsStatsRow}>
+                      <View style={styles.sessionsStat}>
+                        <Text style={styles.sessionsStatValue}>
+                          {hasPurchased ? purchased : '—'}
+                        </Text>
+                        <Text style={styles.sessionsStatLabel}>Purchased</Text>
+                      </View>
+                      <View style={styles.sessionsStat}>
+                        <Text style={styles.sessionsStatValue}>{used}</Text>
+                        <Text style={styles.sessionsStatLabel}>Used</Text>
+                      </View>
+                      <View style={styles.sessionsStat}>
+                        <Text style={[
+                          styles.sessionsStatValue,
+                          hasPurchased && remaining <= 0 && { color: COLORS.danger },
+                          hasPurchased && remaining > 0 && remaining <= 2 && { color: '#FF9800' },
+                        ]}>
+                          {hasPurchased ? remaining : '—'}
+                        </Text>
+                        <Text style={styles.sessionsStatLabel}>Remaining</Text>
+                      </View>
+                    </View>
+                    {hasPurchased && (client?.phone || client?.email) ? (
+                      <View style={styles.notifyRow}>
+                        {client?.phone ? (
+                          <TouchableOpacity style={styles.notifyBtn} onPress={() => confirmAndNotify('sms')}>
+                            <Ionicons name="chatbubble-outline" size={16} color={COLORS.accent} />
+                            <Text style={styles.notifyBtnText}>Text</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {client?.email ? (
+                          <TouchableOpacity style={styles.notifyBtn} onPress={() => confirmAndNotify('email')}>
+                            <Ionicons name="mail-outline" size={16} color={COLORS.accent} />
+                            <Text style={styles.notifyBtnText}>Email</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })()}
             </View>
 
             <View style={styles.actions}>
@@ -560,6 +722,17 @@ export default function ClientDetailScreen({ route, navigation }) {
               onChangeText={setEditPhone}
               keyboardType="phone-pad"
             />
+            <Text style={styles.fieldLabel}>Email</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={COLORS.textMuted}
+              value={editEmail}
+              onChangeText={setEditEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
             <Text style={styles.fieldLabel}>Age</Text>
             <TextInput
               style={styles.input}
@@ -615,6 +788,50 @@ export default function ClientDetailScreen({ route, navigation }) {
             </TouchableWithoutFeedback>
             </ScrollView>
           </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Sessions Purchased Modal */}
+      <Modal visible={sessionsModal} transparent animationType="fade" onRequestClose={() => setSessionsModal(false)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.centerBackdrop} onPress={() => setSessionsModal(false)}>
+            <Pressable style={styles.sessionsModalContent} onPress={() => {}}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Training Sessions</Text>
+                <TouchableOpacity onPress={() => setSessionsModal(false)} style={styles.closeBtn}>
+                  <Text style={styles.closeBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.fieldLabel}>Total Sessions Purchased</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 10"
+                placeholderTextColor={COLORS.textMuted}
+                value={sessionsInput}
+                onChangeText={setSessionsInput}
+                keyboardType="number-pad"
+                autoFocus
+              />
+              <Text style={styles.sessionsHint}>
+                {sessions.length} session{sessions.length !== 1 ? 's' : ''} already logged.
+                {(() => {
+                  const n = parseInt(sessionsInput, 10);
+                  if (!isNaN(n) && n >= 0) {
+                    const r = n - sessions.length;
+                    return ` Remaining will be ${r}.`;
+                  }
+                  return '';
+                })()}
+              </Text>
+              <TouchableOpacity
+                style={styles.modalBtn}
+                onPress={saveSessionsPurchased}
+                disabled={sessionsSaving}
+              >
+                <Text style={styles.modalBtnText}>{sessionsSaving ? 'Saving...' : 'Save'}</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -767,6 +984,97 @@ const styles = StyleSheet.create({
   noteLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
   noteText: { color: COLORS.text, fontSize: 14, lineHeight: 20, fontFamily: FONTS.regular },
   sessionCount: { color: COLORS.textMuted, fontSize: 12, marginTop: 12, fontFamily: FONTS.regular },
+  sessionsBox: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sessionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sessionsEditBtn: {
+    backgroundColor: COLORS.background,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sessionsEditBtnText: {
+    color: COLORS.accent,
+    fontWeight: '700',
+    fontSize: 12,
+    fontFamily: FONTS.bold,
+  },
+  sessionsStatsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sessionsStat: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sessionsStatValue: {
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: FONTS.extraBold,
+  },
+  sessionsStatLabel: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginTop: 4,
+    fontFamily: FONTS.bold,
+  },
+  notifyRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  notifyBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.accent + '40',
+    backgroundColor: COLORS.accent + '12',
+  },
+  notifyBtnText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontFamily: FONTS.semiBold,
+  },
+  sessionsModalContent: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  sessionsHint: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    marginBottom: 16,
+    marginTop: -4,
+  },
 
   // Action buttons
   actions: { flexDirection: 'row', gap: 10, marginBottom: 28 },

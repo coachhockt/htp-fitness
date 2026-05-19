@@ -19,6 +19,7 @@ export default function ClientsScreen({ navigation }) {
   const [newFirst, setNewFirst] = useState('');
   const [newLast, setNewLast] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [newAge, setNewAge] = useState('');
   const [newWeight, setNewWeight] = useState('');
   const [newFat, setNewFat] = useState('');
@@ -59,6 +60,7 @@ export default function ClientsScreen({ navigation }) {
       lastName: newLast.trim() || null,
       name: fullName,
       phone: newPhone.trim(),
+      email: newEmail.trim() || null,
       age: newAge.trim() ? parseInt(newAge.trim()) : null,
       bodyWeight: newWeight.trim() ? parseFloat(newWeight.trim()) : null,
       bodyFat: newFat.trim() ? parseFloat(newFat.trim()) : null,
@@ -69,6 +71,7 @@ export default function ClientsScreen({ navigation }) {
     setNewFirst('');
     setNewLast('');
     setNewPhone('');
+    setNewEmail('');
     setNewAge('');
     setNewWeight('');
     setNewFat('');
@@ -214,6 +217,16 @@ export default function ClientsScreen({ navigation }) {
               value={newPhone}
               onChangeText={setNewPhone}
               keyboardType="phone-pad"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Email (optional)"
+              placeholderTextColor={COLORS.textMuted}
+              value={newEmail}
+              onChangeText={setNewEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
             />
             <TextInput
               style={styles.input}
