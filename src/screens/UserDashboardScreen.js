@@ -6,7 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import {
-  collection, query, where, onSnapshot, doc,
+  collection, query, where, onSnapshot, doc, setDoc,
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -53,6 +53,7 @@ export default function UserDashboardScreen({ navigation }) {
   const upcomingWorkouts = (() => {
     if (!schedule) return [];
     const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const skipped = new Set(schedule.skippedDates || []);
     const results = [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -68,7 +69,9 @@ export default function UserDashboardScreen({ navigation }) {
       const specific = schedule.specificDates || {};
       const isSpecific = Array.isArray(specific) ? specific.includes(dateStr) : dateStr in specific;
 
-      if (isRecurring || isSpecific) {
+      // Specific dates always show. Recurring days are skipped if dateStr is in skippedDates.
+      const include = isSpecific || (isRecurring && !skipped.has(dateStr));
+      if (include) {
         const specificEntry = !Array.isArray(specific) ? specific[dateStr] : null;
         const specificLabel = typeof specificEntry === 'string'
           ? specificEntry
@@ -79,6 +82,57 @@ export default function UserDashboardScreen({ navigation }) {
     }
     return results.slice(0, 3);
   })();
+
+  function handleUpcomingPress(w) {
+    const dateLabel = w.date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    Alert.alert(
+      dateLabel,
+      w.label || 'Scheduled workout',
+      [
+        { text: 'Dismiss', style: 'cancel' },
+        { text: 'Edit', onPress: () => navigation.navigate('ActivityCalendar', { openDate: w.dateStr }) },
+        { text: 'Cancel Session', style: 'destructive', onPress: () => confirmCancelUpcoming(w, dateLabel) },
+      ]
+    );
+  }
+
+  function confirmCancelUpcoming(w, dateLabel) {
+    Alert.alert(
+      'Cancel Session?',
+      `Skip your scheduled workout on ${dateLabel}?`,
+      [
+        { text: 'No', style: 'cancel' },
+        { text: 'Yes', style: 'destructive', onPress: () => cancelUpcoming(w) },
+      ]
+    );
+  }
+
+  async function cancelUpcoming(w) {
+    if (!schedule) return;
+    const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const dayKey = DAY_KEYS[w.date.getDay()];
+    try {
+      const updated = { ...schedule };
+      const specific = schedule.specificDates || {};
+      const isInSpecific = !Array.isArray(specific) && w.dateStr in specific;
+      const isRecurring = schedule.days?.[dayKey]?.enabled;
+
+      if (isInSpecific) {
+        const newSpecific = { ...specific };
+        delete newSpecific[w.dateStr];
+        updated.specificDates = newSpecific;
+      }
+      if (isRecurring) {
+        const skipped = new Set(schedule.skippedDates || []);
+        skipped.add(w.dateStr);
+        updated.skippedDates = Array.from(skipped);
+      }
+      updated.updatedAt = new Date().toISOString();
+      await setDoc(doc(db, 'schedules', user.uid), updated);
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  }
 
   const sessionsThisWeek = (() => {
     const now = new Date();
@@ -238,14 +292,19 @@ export default function UserDashboardScreen({ navigation }) {
               })();
               const dayLabel = isToday ? 'Today' : isTomorrow ? 'Tomorrow' : w.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
               return (
-                <View key={w.dateStr} style={styles.upcomingCard}>
+                <TouchableOpacity
+                  key={w.dateStr}
+                  style={styles.upcomingCard}
+                  onPress={() => handleUpcomingPress(w)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.upcomingDot} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.upcomingDay}>{dayLabel}</Text>
                     {w.label ? <Text style={styles.upcomingLabel}>{w.label}</Text> : null}
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-                </View>
+                  <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
               );
             })
           ) : (

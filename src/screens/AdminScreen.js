@@ -23,11 +23,10 @@ export default function AdminScreen() {
     });
   }, []);
 
-  async function updateStatus(userId, email, newStatus) {
-    const label = newStatus === 'frozen' ? 'freeze' : newStatus === 'active' ? 'unfreeze' : 'close';
+  async function updateStatus(userId, email, newStatus, action) {
     Alert.alert(
-      `${label.charAt(0).toUpperCase() + label.slice(1)} Account`,
-      `Are you sure you want to ${label} ${email}?`,
+      `${action.charAt(0).toUpperCase() + action.slice(1)} Account`,
+      `Are you sure you want to ${action} ${email}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -75,7 +74,7 @@ export default function AdminScreen() {
               {item.status === 'active' && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.freezeBtn]}
-                  onPress={() => updateStatus(item.id, item.email, 'frozen')}
+                  onPress={() => updateStatus(item.id, item.email, 'frozen', 'freeze')}
                 >
                   <Text style={styles.freezeBtnText}>Freeze</Text>
                 </TouchableOpacity>
@@ -83,15 +82,23 @@ export default function AdminScreen() {
               {item.status === 'frozen' && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.unfreezeBtn]}
-                  onPress={() => updateStatus(item.id, item.email, 'active')}
+                  onPress={() => updateStatus(item.id, item.email, 'active', 'unfreeze')}
                 >
                   <Text style={styles.unfreezeBtnText}>Unfreeze</Text>
+                </TouchableOpacity>
+              )}
+              {item.status === 'closed' && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.reopenBtn]}
+                  onPress={() => updateStatus(item.id, item.email, 'active', 'reopen')}
+                >
+                  <Text style={styles.reopenBtnText}>Reopen</Text>
                 </TouchableOpacity>
               )}
               {item.status !== 'closed' && (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.closeBtn]}
-                  onPress={() => updateStatus(item.id, item.email, 'closed')}
+                  onPress={() => updateStatus(item.id, item.email, 'closed', 'close')}
                 >
                   <Text style={styles.closeBtnText}>Close</Text>
                 </TouchableOpacity>
@@ -175,6 +182,16 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     color: COLORS.danger,
+    fontSize: 13,
+    fontFamily: FONTS.semiBold,
+  },
+  reopenBtn: {
+    backgroundColor: '#4CAF501A',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  reopenBtnText: {
+    color: '#4CAF50',
     fontSize: 13,
     fontFamily: FONTS.semiBold,
   },

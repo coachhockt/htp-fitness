@@ -70,15 +70,17 @@ function normalizeSchedule(raw) {
       else if (val && typeof val === 'object') specificDates[ds] = { label: val.label || '', time: val.time || defaultTime };
     }
   }
+  const skippedDates = Array.isArray(raw?.skippedDates) ? raw.skippedDates : [];
   return {
     days,
     specificDates,
+    skippedDates,
     reminderTime: defaultTime,
     ...(raw?.updatedAt ? { updatedAt: raw.updatedAt } : {}),
   };
 }
 
-export default function ActivityCalendarScreen({ navigation }) {
+export default function ActivityCalendarScreen({ navigation, route }) {
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [sessionDays, setSessionDays] = useState(new Set());
@@ -146,6 +148,19 @@ export default function ActivityCalendarScreen({ navigation }) {
       setAllSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [user.uid]);
+
+  // Auto-open day modal when navigated from dashboard with openDate
+  useEffect(() => {
+    const openDate = route?.params?.openDate;
+    if (!openDate) return;
+    const parts = openDate.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN)) return;
+    const [y, m, d] = parts;
+    setCurrentDate(new Date(y, m - 1, d));
+    setSelectedDay(d);
+    setDayModalVisible(true);
+    navigation.setParams({ openDate: undefined });
+  }, [route?.params?.openDate]);
 
   // Fetch bookmarked session IDs
   useEffect(() => {
