@@ -12,23 +12,105 @@ import { compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, c
 import { Ionicons } from '@expo/vector-icons';
 
 const COMMON_EXERCISES = [
+  // Chest
   'Bench Press', 'Incline Bench Press', 'Decline Bench Press',
-  'DB Bench Press', 'DB Incline Bench Press', 'DB Fly', 'DB Incline Fly',
+  'DB Bench Press', 'DB Incline Bench Press', 'DB Decline Bench Press',
+  'DB Fly', 'DB Incline Fly', 'DB Pullover', 'DB Floor Press', 'DB Squeeze Press',
+  'Push Up', 'Diamond Push Up', 'Wide-Grip Push Up', 'Decline Push Up', 'Incline Push Up',
+  'Pike Push Up', 'Handstand Push Up', 'Archer Push Up', 'Pseudo Planche Push Up', 'Clap Push Up',
+  'Cable Crossover', 'Cable Fly', 'Cable Press', 'Cable Bench Press', 'Single-Arm Cable Fly',
+  'Incline Cable Press', 'Incline Cable Fly',
+  'Pec Deck', 'Machine Chest Press', 'Incline Machine Chest Press',
+  'Dips', 'Close-Grip Bench Press', 'Incline Close-Grip Bench Press',
+  'DB Incline Squeeze Press', 'Reverse-Grip Incline Bench Press', 'BB Floor Press',
+  'Smith Bench Press', 'Smith Incline Bench Press', 'Smith Decline Bench Press', 'Smith Close-Grip Bench Press',
+  // Legs - Squat variants
   'Squat', 'Back Squat', 'Front Squat', 'Goblet Squat', 'Bulgarian Split Squat',
+  'Box Squat', 'Pause Squat', 'Pin Squat', 'Zercher Squat', 'Overhead Squat',
+  'Hack Squat', 'Sissy Squat',
+  'DB Squat', 'DB Sumo Squat', 'BW Squat', 'Jump Squat', 'Pistol Squat',
+  'Smith Squat', 'Smith Front Squat', 'Smith Split Squat', 'Smith Bulgarian Split Squat',
+  // Legs - Lunge / Step
+  'Lunge', 'Walking Lunge', 'Reverse Lunge', 'Step Up',
+  'BB Walking Lunge', 'BB Reverse Lunge', 'BB Step Up',
+  'DB Lunge', 'DB Walking Lunge', 'DB Reverse Lunge', 'DB Bulgarian Split Squat', 'DB Step Up',
+  'Smith Lunge', 'Smith Reverse Lunge',
+  // Legs - Press / Curl / Extension
+  'Leg Press', 'Leg Curl', 'Leg Extension',
+  'Calf Raise', 'DB Calf Raise', 'BB Calf Raise', 'Smith Calf Raise',
+  'Adductor', 'Abductor', 'Wall Sit', 'Broad Jump', 'Mammoth Belt Squat',
+  // Glutes / Hips
+  'Hip Thrust', 'BB Glute Bridge', 'Glute Bridge', 'Single-Leg Glute Bridge', 'BW Hip Thrust',
+  'DB Hip Thrust', 'Smith Hip Thrust',
+  'Glute Kickback', 'Cable Glute Kickback', 'Cable Hip Abduction', 'Cable Pull Through',
+  'Nordic Curl', 'Good Morning', 'Smith Good Morning',
+  // Posterior chain / Deadlift
   'Deadlift', 'Sumo Deadlift', 'Romanian Deadlift', 'DB Romanian Deadlift',
-  'Overhead Press', 'DB Shoulder Press', 'Arnold Press', 'Lateral Raise', 'DB Lateral Raise',
-  'Barbell Row', 'BB Row', 'DB Row', 'Pendlay Row', 'Seated Cable Row', 'T-Bar Row',
-  'Pull Up', 'Chin Up', 'Lat Pulldown',
-  'Barbell Curl', 'BB Curl', 'DB Curl', 'Hammer Curl', 'Preacher Curl', 'EZ Bar Curl',
-  'Tricep Pushdown', 'Skull Crusher', 'Tricep Dip', 'Overhead Tricep Extension',
-  'Leg Press', 'Leg Curl', 'Leg Extension', 'Hip Thrust', 'Calf Raise',
-  'Cable Fly', 'Face Pull', 'Shrug', 'DB Shrug',
+  'Deficit Deadlift', 'Rack Pull', 'Stiff-Leg Deadlift', 'Snatch-Grip Deadlift',
+  'DB Single-Leg Deadlift', 'Smith Romanian Deadlift',
+  // Shoulders
+  'Overhead Press', 'DB Shoulder Press', 'DB Incline Shoulder Press', 'Arnold Press', 'Behind-the-Neck Press',
+  'Smith Overhead Press', 'Smith Incline Shoulder Press', 'Smith Behind-the-Neck Press',
+  'Lateral Raise', 'DB Lateral Raise', 'Cable Lateral Raise', 'Incline Lateral Raise',
+  'Front Raise', 'DB Front Raise', 'BB Front Raise', 'Cable Front Raise',
+  'Rear Delt Fly', 'DB Rear Delt Fly', 'Cable Rear Delt Fly', 'Cable Reverse Fly', 'Incline Rear Delt Fly',
+  'Upright Row', 'Cable Upright Row', 'BB Upright Row', 'DB Upright Row', 'Smith Upright Row',
+  'DB Y-Raise', 'Incline Y-Raise', 'Incline T-Raise', 'DB Cuban Press', 'DB Push Press',
+  // Back
+  'Barbell Row', 'BB Row', 'DB Row', 'Single-Arm DB Row', 'Pendlay Row', 'Yates Row',
+  'Reverse-Grip BB Row', 'Seated Cable Row', 'Cable Row', 'Wide-Grip Cable Row',
+  'Single-Arm Cable Row', 'Machine Row', 'T-Bar Row', 'Meadows Row',
+  'DB Renegade Row', 'Chest-Supported DB Row', 'Incline DB Row', 'Kroc Row',
+  'Smith Bent-Over Row', 'Smith Inverted Row',
+  'Pull Up', 'Chin Up', 'Wide-Grip Pull Up', 'Close-Grip Pull Up', 'Neutral-Grip Pull Up',
+  'Australian Pull Up', 'Muscle Up',
+  'Lat Pulldown', 'Wide-Grip Pulldown', 'Close-Grip Pulldown', 'Reverse-Grip Pulldown',
+  'Straight-Arm Pulldown', 'Cable Pullover', 'Inverted Row',
+  // Biceps
+  'Barbell Curl', 'BB Curl', 'DB Curl', 'Hammer Curl', 'Preacher Curl',
+  'EZ Bar Curl', 'Cable Curl', 'Concentration Curl', 'Spider Curl', 'Reverse Curl',
+  'Drag Curl', 'Cable Hammer Curl', 'Cable Preacher Curl', 'Cable Concentration Curl',
+  'Rope Hammer Curl', 'Bayesian Curl',
+  'DB Preacher Curl', 'DB Incline Curl', 'Incline Hammer Curl', 'DB Spider Curl', 'Zottman Curl', 'Cross-Body Hammer Curl',
+  // Triceps
+  'Tricep Pushdown', 'Rope Pushdown', 'Reverse-Grip Pushdown', 'Single-Arm Cable Pushdown',
+  'Skull Crusher', 'BB JM Press', 'Tricep Dip', 'Bench Dip',
+  'Overhead Tricep Extension', 'Cable Overhead Tricep Extension', 'Cable Kickback',
+  'DB Skull Crusher', 'Incline DB Skull Crusher', 'Incline DB Tricep Extension',
+  'DB Kickback', 'DB Tate Press', 'DB JM Press',
+  // Traps / other
+  'Face Pull', 'Shrug', 'DB Shrug', 'Barbell Shrug', 'Smith Shrug',
+  // Core / Abs
+  'Plank', 'Side Plank', 'Hollow Hold', 'L-Sit',
+  'Crunch', 'Cable Crunch', 'Reverse Crunch', 'Cable Reverse Crunch', 'Bicycle Crunch', 'Decline Crunch',
+  'Decline Sit Up',
+  'Hanging Leg Raise', 'Lying Leg Raise', 'Toes to Bar', 'Knees to Elbows',
+  'Ab Wheel', 'Barbell Rollout',
+  'Russian Twist', 'BB Russian Twist', 'DB Russian Twist', 'Cable Woodchopper', 'Pallof Press',
+  'Cable Side Bend', 'DB Side Bend',
+  'Dead Bug', 'Bird Dog', 'Sit Up', 'DB Sit Up', 'V-Up', 'DB V-Up',
+  'Mountain Climber', 'Flutter Kicks', 'Superman',
+  'Landmine Press', 'Landmine Row', 'Landmine Twist',
+  // Cardio / Conditioning
+  'Treadmill', 'Bike', 'Rower', 'Stair Climber',
+  'Box Jump', 'Burpee', 'Battle Ropes', 'Sled Push', 'Farmer Carry', 'DB Farmer Carry',
+  'DB Thruster', 'DB Burpee', 'DB Man Maker',
+  'Pike Walk', 'Bear Crawl', 'Crab Walk',
+  // Olympic / Power
+  'Clean', 'Power Clean', 'Hang Clean', 'Snatch', 'Power Snatch',
+  'Push Press', 'Jerk', 'Clean and Jerk', 'Push Jerk', 'Clean Pull', 'Snatch Pull',
+  'Kettlebell Swing', 'KB Goblet Squat',
+  'DB Snatch', 'DB Clean', 'DB Clean and Press',
+  // Mobility / Warm-up
+  "World's Greatest Stretch", '90/90', 'Couch Stretch', 'Hip CARs', 'Banded Pull Apart',
 ];
 
 const ABBREVIATIONS = {
-  'db': 'dumbbell', 'bb': 'barbell', 'ez': 'ez bar',
+  'db': 'dumbbell', 'bb': 'barbell', 'ez': 'ez bar', 'kb': 'kettlebell',
+  'sm': 'smith', 'cb': 'cable',
   'ohp': 'overhead press', 'rdl': 'romanian deadlift',
   'bp': 'bench press', 'dl': 'deadlift', 'sq': 'squat',
+  'lr': 'lateral raise', 'bw': 'bodyweight', 'pu': 'push up', 'sl': 'single leg',
 };
 
 const SET_COLORS = {
@@ -54,10 +136,14 @@ function SetBadge({ type, index, isAboveDropset }) {
   return <Text style={[styles.setNum, isAboveDropset && { color: SET_COLORS.dropset }]}>{index + 1}</Text>;
 }
 
-function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset }) {
+function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset, unit }) {
   const rowBg = set.type === 'dropset' ? SET_COLORS.dropset + '10'
     : set.type === 'superset' ? SET_COLORS.superset + '10'
     : 'transparent';
+  const isSeconds = unit === 'seconds';
+  const repsPlaceholder = isSeconds ? 'sec' : 'reps';
+  const repsMax = isSeconds ? 3600 : 200;
+  const repsLabel = isSeconds ? 'Seconds' : 'Reps';
 
   return (
     <View style={[styles.setRow, { backgroundColor: rowBg, borderRadius: 8 }]}>
@@ -69,7 +155,7 @@ function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset }) 
       </TouchableOpacity>
       <TextInput
         style={styles.setInput}
-        placeholder="lbs"
+        placeholder="B.W."
         placeholderTextColor={COLORS.textMuted}
         value={set.weight}
         onChangeText={v => {
@@ -90,17 +176,17 @@ function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset }) 
       <Text style={styles.x}>×</Text>
       <TextInput
         style={styles.setInput}
-        placeholder="reps"
+        placeholder={repsPlaceholder}
         placeholderTextColor={COLORS.textMuted}
         value={set.reps}
         onChangeText={v => {
           const num = parseInt(v);
           if (v !== '' && !isNaN(num) && num < 0) {
-            Alert.alert('Invalid', 'Reps cannot be negative.');
+            Alert.alert('Invalid', `${repsLabel} cannot be negative.`);
             return;
           }
-          if (v !== '' && !isNaN(num) && num > 200) {
-            Alert.alert('Limit Reached', 'Maximum 200 reps per set.');
+          if (v !== '' && !isNaN(num) && num > repsMax) {
+            Alert.alert('Limit Reached', `Maximum ${repsMax} ${repsLabel.toLowerCase()} per set.`);
             return;
           }
           onUpdate(index, 'reps', v);
@@ -126,6 +212,8 @@ export default function NewSessionScreen({ route, navigation }) {
   const [tagMenu, setTagMenu] = useState(null); // { exIdx, setIdx }
   const [exerciseMenu, setExerciseMenu] = useState(null); // { exIdx }
   const [supersetPicker, setSupersetPicker] = useState(null); // { exIdx }
+  const [noteModal, setNoteModal] = useState(null); // { exIdx }
+  const [noteInput, setNoteInput] = useState('');
 
   useEffect(() => {
     async function loadPast() {
@@ -213,11 +301,13 @@ export default function NewSessionScreen({ route, navigation }) {
           sets: ex.sets
             .filter(s => s.weight !== '' || s.reps !== '')
             .map(s => ({
-              weight: parseFloat(s.weight) || 0,
+              weight: s.weight === '' ? null : (parseFloat(s.weight) || 0),
               reps: parseInt(s.reps) || 0,
               ...(s.type ? { type: s.type } : {}),
             })),
           ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
+          ...(ex.unit === 'seconds' ? { unit: 'seconds' } : {}),
+          ...(ex.note ? { note: ex.note } : {}),
         }))
         .filter(ex => ex.sets.length > 0)
     );
@@ -355,6 +445,32 @@ export default function NewSessionScreen({ route, navigation }) {
     setExerciseMenu(null);
   }
 
+  function toggleExerciseUnit(exIdx) {
+    setExercises(prev => prev.map((ex, i) =>
+      i === exIdx
+        ? { ...ex, unit: ex.unit === 'seconds' ? 'reps' : 'seconds' }
+        : ex
+    ));
+    setExerciseMenu(null);
+  }
+
+  function openNoteModal(exIdx) {
+    setNoteInput(exercises[exIdx]?.note || '');
+    setExerciseMenu(null);
+    setNoteModal({ exIdx });
+  }
+
+  function saveExerciseNote() {
+    if (!noteModal) return;
+    const idx = noteModal.exIdx;
+    const trimmed = noteInput.trim();
+    setExercises(prev => prev.map((ex, i) =>
+      i === idx ? { ...ex, note: trimmed || null } : ex
+    ));
+    setNoteModal(null);
+    setNoteInput('');
+  }
+
   async function saveSession() {
     if (exercises.length === 0) {
       Alert.alert('No exercises', 'Add at least one exercise before saving.');
@@ -368,11 +484,13 @@ export default function NewSessionScreen({ route, navigation }) {
           sets: ex.sets
             .filter(s => s.weight !== '' || s.reps !== '')
             .map(s => ({
-              weight: parseFloat(s.weight) || 0,
+              weight: s.weight === '' ? null : (parseFloat(s.weight) || 0),
               reps: parseInt(s.reps) || 0,
               ...(s.type ? { type: s.type } : {}),
             })),
           ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
+          ...(ex.unit === 'seconds' ? { unit: 'seconds' } : {}),
+          ...(ex.note ? { note: ex.note } : {}),
         }))
         .filter(ex => ex.sets.length > 0)
     );
@@ -429,12 +547,18 @@ export default function NewSessionScreen({ route, navigation }) {
                 onPress={() => setExerciseMenu({ exIdx })}
                 hitSlop={{ top: 6, bottom: 6 }}
               >
-                <Text style={styles.exName}>{ex.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.exName}>{ex.name}</Text>
+                  <Ionicons name="chevron-down" size={14} color={COLORS.textMuted} />
+                </View>
                 {groupLabel && (
                   <View style={styles.supersetBadge}>
                     <Text style={styles.supersetBadgeText}>SUPERSET {groupLabel}</Text>
                   </View>
                 )}
+                {ex.note ? (
+                  <Text style={styles.exNote}>{ex.note}</Text>
+                ) : null}
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => moveExercise(exIdx, -1)}
@@ -461,7 +585,7 @@ export default function NewSessionScreen({ route, navigation }) {
               <Text style={[styles.colHeader, { width: 28 }]}>SET</Text>
               <Text style={[styles.colHeader, { flex: 1 }]}>WEIGHT</Text>
               <Text style={styles.colHeader}> </Text>
-              <Text style={[styles.colHeader, { flex: 1 }]}>REPS</Text>
+              <Text style={[styles.colHeader, { flex: 1 }]}>{ex.unit === 'seconds' ? 'SEC' : 'REPS'}</Text>
               <Text style={[styles.colHeader, { width: 36 }]}> </Text>
             </View>
 
@@ -474,6 +598,7 @@ export default function NewSessionScreen({ route, navigation }) {
                 onDelete={(si) => deleteSet(exIdx, si)}
                 onTagPress={(si) => setTagMenu({ exIdx, setIdx: si })}
                 isAboveDropset={ex.sets[setIdx + 1]?.type === 'dropset'}
+                unit={ex.unit}
               />
             ))}
 
@@ -582,7 +707,7 @@ export default function NewSessionScreen({ route, navigation }) {
             </Text>
             {exerciseMenu && exercises[exerciseMenu.exIdx]?.supersetGroupId ? (
               <TouchableOpacity
-                style={[styles.tagOption, { borderBottomWidth: 0 }]}
+                style={styles.tagOption}
                 onPress={() => removeFromSuperset(exerciseMenu.exIdx)}
               >
                 <View style={[styles.tagDot, { backgroundColor: SET_COLORS.superset }]} />
@@ -590,7 +715,7 @@ export default function NewSessionScreen({ route, navigation }) {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                style={[styles.tagOption, { borderBottomWidth: 0 }]}
+                style={styles.tagOption}
                 onPress={() => {
                   const idx = exerciseMenu.exIdx;
                   setExerciseMenu(null);
@@ -601,6 +726,26 @@ export default function NewSessionScreen({ route, navigation }) {
                 <Text style={styles.tagOptionText}>Make Superset</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.tagOption}
+              onPress={() => toggleExerciseUnit(exerciseMenu.exIdx)}
+            >
+              <Ionicons name="timer-outline" size={16} color={COLORS.accent} style={{ marginRight: 10 }} />
+              <Text style={styles.tagOptionText}>
+                {exerciseMenu && exercises[exerciseMenu.exIdx]?.unit === 'seconds'
+                  ? 'Use Reps'
+                  : 'Use Seconds'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tagOption, { borderBottomWidth: 0 }]}
+              onPress={() => openNoteModal(exerciseMenu.exIdx)}
+            >
+              <Ionicons name="document-text-outline" size={16} color={COLORS.accent} style={{ marginRight: 10 }} />
+              <Text style={styles.tagOptionText}>
+                {exerciseMenu && exercises[exerciseMenu.exIdx]?.note ? 'Edit Note' : 'Add Note'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </Pressable>
       </Modal>
@@ -635,6 +780,37 @@ export default function NewSessionScreen({ route, navigation }) {
             })()}
           </View>
         </Pressable>
+      </Modal>
+
+      <Modal visible={noteModal !== null} transparent animationType="fade" onRequestClose={() => setNoteModal(null)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.noteOverlay} onPress={() => setNoteModal(null)}>
+            <Pressable style={styles.noteModal} onPress={() => {}}>
+              <Text style={styles.tagTitle}>
+                {noteModal && exercises[noteModal.exIdx]?.name} — Note
+              </Text>
+              <TextInput
+                style={styles.noteInput}
+                placeholder="e.g. felt strong, increase next time"
+                placeholderTextColor={COLORS.textMuted}
+                value={noteInput}
+                onChangeText={setNoteInput}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                autoFocus
+              />
+              <View style={styles.noteActions}>
+                <TouchableOpacity style={styles.noteCancelBtn} onPress={() => setNoteModal(null)}>
+                  <Text style={styles.noteCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.noteSaveBtn} onPress={saveExerciseNote}>
+                  <Text style={styles.noteSaveText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -680,6 +856,13 @@ const styles = StyleSheet.create({
   },
   exNameBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   exName: { color: COLORS.text, fontWeight: '700', fontSize: 17, fontFamily: FONTS.bold },
+  exNote: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginTop: 4,
+    fontFamily: FONTS.regular,
+  },
   supersetBadge: {
     backgroundColor: SET_COLORS.superset + '22',
     borderRadius: 6,
@@ -788,6 +971,46 @@ const styles = StyleSheet.create({
   pickerEmpty: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular, textAlign: 'center', paddingVertical: 12 },
   pickerHint: { color: COLORS.textMuted, fontSize: 11, fontFamily: FONTS.regular, marginLeft: 8 },
   tagTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 12, textAlign: 'center' },
+  noteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  noteModal: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  noteInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 14,
+    color: COLORS.text,
+    minHeight: 90,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    fontSize: 15,
+    fontFamily: FONTS.regular,
+    marginBottom: 14,
+  },
+  noteActions: { flexDirection: 'row', gap: 10 },
+  noteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  noteCancelText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.semiBold },
+  noteSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+  },
+  noteSaveText: { color: '#000', fontSize: 14, fontFamily: FONTS.bold },
   tagOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
   tagDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
   tagOptionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular, flex: 1 },

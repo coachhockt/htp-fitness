@@ -9,6 +9,7 @@ export function titleCaseExercise(name) {
 
 // Epley formula: 1RM = weight × (1 + reps / 30)
 export function estimate1RM(weight, reps) {
+  if (weight == null || reps == null) return 0;
   if (reps <= 0 || weight <= 0) return 0;
   if (reps === 1) return weight;
   return Math.round(weight * (1 + reps / 30));

@@ -49,6 +49,8 @@ export default function SessionDetailScreen({ route, navigation }) {
   const [saving, setSaving] = useState(false);
   const [tagMenu, setTagMenu] = useState(null);
   const [exerciseMenu, setExerciseMenu] = useState(null); // { exIdx }
+  const [noteModal, setNoteModal] = useState(null); // { exIdx }
+  const [noteInput, setNoteInput] = useState('');
   const [supersetPicker, setSupersetPicker] = useState(null); // { exIdx }
   const [pastExercises, setPastExercises] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
@@ -169,8 +171,8 @@ export default function SessionDetailScreen({ route, navigation }) {
 
   function totalVolume(sets) {
     return sets?.reduce((sum, s) => {
-      const w = typeof s.weight === 'string' ? parseFloat(s.weight) || 0 : s.weight;
-      const r = typeof s.reps === 'string' ? parseInt(s.reps) || 0 : s.reps;
+      const w = typeof s.weight === 'string' ? parseFloat(s.weight) || 0 : (s.weight || 0);
+      const r = typeof s.reps === 'string' ? parseInt(s.reps) || 0 : (s.reps || 0);
       return sum + w * r;
     }, 0) || 0;
   }
@@ -185,8 +187,14 @@ export default function SessionDetailScreen({ route, navigation }) {
     setEditExercises(
       session.exercises.map(ex => ({
         name: ex.name,
-        sets: ex.sets.map(s => ({ weight: String(s.weight), reps: String(s.reps), type: s.type || null })),
+        sets: ex.sets.map(s => ({
+          weight: s.weight == null ? '' : String(s.weight),
+          reps: s.reps == null ? '' : String(s.reps),
+          type: s.type || null,
+        })),
         ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
+        ...(ex.unit === 'seconds' ? { unit: 'seconds' } : {}),
+        ...(ex.note ? { note: ex.note } : {}),
       }))
     );
     setEditing(true);
@@ -288,6 +296,32 @@ export default function SessionDetailScreen({ route, navigation }) {
     setExerciseMenu(null);
   }
 
+  function toggleExerciseUnit(exIdx) {
+    setEditExercises(prev => prev.map((ex, i) =>
+      i === exIdx
+        ? { ...ex, unit: ex.unit === 'seconds' ? 'reps' : 'seconds' }
+        : ex
+    ));
+    setExerciseMenu(null);
+  }
+
+  function openNoteModal(exIdx) {
+    setNoteInput(editExercises[exIdx]?.note || '');
+    setExerciseMenu(null);
+    setNoteModal({ exIdx });
+  }
+
+  function saveExerciseNote() {
+    if (!noteModal) return;
+    const idx = noteModal.exIdx;
+    const trimmed = noteInput.trim();
+    setEditExercises(prev => prev.map((ex, i) =>
+      i === idx ? { ...ex, note: trimmed || null } : ex
+    ));
+    setNoteModal(null);
+    setNoteInput('');
+  }
+
   async function saveEdits() {
     if (!editDate || isNaN(editDate.getTime())) {
       Alert.alert('Invalid date', 'Please select a valid date.');
@@ -303,11 +337,13 @@ export default function SessionDetailScreen({ route, navigation }) {
           sets: ex.sets
             .filter(s => s.weight !== '' || s.reps !== '')
             .map(s => ({
-              weight: parseFloat(s.weight) || 0,
+              weight: s.weight === '' ? null : (parseFloat(s.weight) || 0),
               reps: parseInt(s.reps) || 0,
               ...(s.type ? { type: s.type } : {}),
             })),
           ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
+          ...(ex.unit === 'seconds' ? { unit: 'seconds' } : {}),
+          ...(ex.note ? { note: ex.note } : {}),
         }))
         .filter(ex => ex.sets.length > 0)
     );
@@ -394,11 +430,14 @@ export default function SessionDetailScreen({ route, navigation }) {
                   <Text style={styles.supersetBadgeText}>SUPERSET {groupLabel}</Text>
                 </View>
               )}
+              {ex.note ? (
+                <Text style={styles.exNote}>{ex.note}</Text>
+              ) : null}
             </View>
             <View style={styles.tableHeader}>
               <Text style={[styles.th, { width: 36 }]}>SET</Text>
               <Text style={[styles.th, { flex: 1 }]}>WEIGHT</Text>
-              <Text style={[styles.th, { flex: 1 }]}>REPS</Text>
+              <Text style={[styles.th, { flex: 1 }]}>{ex.unit === 'seconds' ? 'SEC' : 'REPS'}</Text>
               <Text style={[styles.th, { flex: 1 }]}>VOLUME</Text>
             </View>
             {ex.sets?.map((set, j) => {
@@ -424,10 +463,14 @@ export default function SessionDetailScreen({ route, navigation }) {
                       <Text style={[styles.td, isAboveDropset && { color: SET_COLORS.dropset }]}>{j + 1}</Text>
                     )}
                   </View>
-                  <Text style={[styles.td, { flex: 1 }]}>{set.weight} lbs</Text>
-                  <Text style={[styles.td, { flex: 1 }]}>{set.reps}</Text>
+                  <Text style={[styles.td, { flex: 1 }]}>
+                    {set.weight == null || set.weight === 0 ? 'B.W.' : `${set.weight} lbs`}
+                  </Text>
+                  <Text style={[styles.td, { flex: 1 }]}>
+                    {ex.unit === 'seconds' ? `${set.reps} sec` : set.reps}
+                  </Text>
                   <Text style={[styles.td, { flex: 1 }, styles.tdMuted]}>
-                    {(set.weight * set.reps).toLocaleString()}
+                    {((set.weight || 0) * (set.reps || 0)).toLocaleString()}
                   </Text>
                 </View>
               );
@@ -437,16 +480,18 @@ export default function SessionDetailScreen({ route, navigation }) {
                 Volume: {totalVolume(ex.sets).toLocaleString()} lbs
               </Text>
               <Text style={styles.exMax}>
-                Max: {Math.max(...(ex.sets?.map(s => s.weight) || [0]))} lbs
+                Max: {Math.max(...(ex.sets?.map(s => s.weight || 0) || [0]))} lbs
               </Text>
             </View>
-            <View style={styles.e1rmRow}>
-              <Text style={styles.e1rmLabel}>Est. 1RM</Text>
-              <Text style={styles.e1rmVal}>
-                {session.estimated1RMs?.find(e => e.name === ex.name)?.value
-                  || Math.max(...(ex.sets?.map(s => estimate1RM(s.weight, s.reps)) || [0]))} lbs
-              </Text>
-            </View>
+            {ex.unit !== 'seconds' && (
+              <View style={styles.e1rmRow}>
+                <Text style={styles.e1rmLabel}>Est. 1RM</Text>
+                <Text style={styles.e1rmVal}>
+                  {session.estimated1RMs?.find(e => e.name === ex.name)?.value
+                    || Math.max(...(ex.sets?.map(s => estimate1RM(s.weight, s.reps)) || [0]))} lbs
+                </Text>
+              </View>
+            )}
           </View>
           );
         })}
@@ -551,6 +596,9 @@ export default function SessionDetailScreen({ route, navigation }) {
                 <Text style={styles.removeEx}>Remove</Text>
               </TouchableOpacity>
             </View>
+            {ex.note ? (
+              <Text style={styles.exNote}>{ex.note}</Text>
+            ) : null}
             {suggestionIdx === exIdx && suggestions.length > 0 && (
               <View style={styles.suggestionsBox}>
                 {suggestions.map((s, i) => (
@@ -572,7 +620,7 @@ export default function SessionDetailScreen({ route, navigation }) {
               <Text style={[styles.editColHeader, { width: 28 }]}>SET</Text>
               <Text style={[styles.editColHeader, { flex: 1 }]}>WEIGHT</Text>
               <Text style={styles.editColHeader}> </Text>
-              <Text style={[styles.editColHeader, { flex: 1 }]}>REPS</Text>
+              <Text style={[styles.editColHeader, { flex: 1 }]}>{ex.unit === 'seconds' ? 'SEC' : 'REPS'}</Text>
               <Text style={[styles.editColHeader, { width: 36 }]}> </Text>
             </View>
 
@@ -614,7 +662,7 @@ export default function SessionDetailScreen({ route, navigation }) {
                     }
                     updateSet(exIdx, setIdx, 'weight', v);
                   }}
-                  placeholder="lbs"
+                  placeholder="B.W."
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="decimal-pad"
                   selectTextOnFocus
@@ -625,17 +673,20 @@ export default function SessionDetailScreen({ route, navigation }) {
                   value={set.reps}
                   onChangeText={v => {
                     const num = parseInt(v);
+                    const isSeconds = ex.unit === 'seconds';
+                    const max = isSeconds ? 3600 : 200;
+                    const label = isSeconds ? 'Seconds' : 'Reps';
                     if (v !== '' && !isNaN(num) && num < 0) {
-                      Alert.alert('Invalid', 'Reps cannot be negative.');
+                      Alert.alert('Invalid', `${label} cannot be negative.`);
                       return;
                     }
-                    if (v !== '' && !isNaN(num) && num > 200) {
-                      Alert.alert('Limit Reached', 'Maximum 200 reps per set.');
+                    if (v !== '' && !isNaN(num) && num > max) {
+                      Alert.alert('Limit Reached', `Maximum ${max} ${label.toLowerCase()} per set.`);
                       return;
                     }
                     updateSet(exIdx, setIdx, 'reps', v);
                   }}
-                  placeholder="reps"
+                  placeholder={ex.unit === 'seconds' ? 'sec' : 'reps'}
                   placeholderTextColor={COLORS.textMuted}
                   keyboardType="number-pad"
                   selectTextOnFocus
@@ -713,7 +764,7 @@ export default function SessionDetailScreen({ route, navigation }) {
             </Text>
             {exerciseMenu && editExercises[exerciseMenu.exIdx]?.supersetGroupId ? (
               <TouchableOpacity
-                style={[styles.tagOption, { borderBottomWidth: 0 }]}
+                style={styles.tagOption}
                 onPress={() => removeFromSuperset(exerciseMenu.exIdx)}
               >
                 <View style={[styles.tagDot, { backgroundColor: SET_COLORS.superset }]} />
@@ -721,7 +772,7 @@ export default function SessionDetailScreen({ route, navigation }) {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
-                style={[styles.tagOption, { borderBottomWidth: 0 }]}
+                style={styles.tagOption}
                 onPress={() => {
                   const idx = exerciseMenu.exIdx;
                   setExerciseMenu(null);
@@ -732,8 +783,59 @@ export default function SessionDetailScreen({ route, navigation }) {
                 <Text style={styles.tagOptionText}>Make Superset</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.tagOption}
+              onPress={() => toggleExerciseUnit(exerciseMenu.exIdx)}
+            >
+              <Ionicons name="timer-outline" size={16} color={COLORS.accent} style={{ marginRight: 10 }} />
+              <Text style={styles.tagOptionText}>
+                {exerciseMenu && editExercises[exerciseMenu.exIdx]?.unit === 'seconds'
+                  ? 'Use Reps'
+                  : 'Use Seconds'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tagOption, { borderBottomWidth: 0 }]}
+              onPress={() => openNoteModal(exerciseMenu.exIdx)}
+            >
+              <Ionicons name="document-text-outline" size={16} color={COLORS.accent} style={{ marginRight: 10 }} />
+              <Text style={styles.tagOptionText}>
+                {exerciseMenu && editExercises[exerciseMenu.exIdx]?.note ? 'Edit Note' : 'Add Note'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </Pressable>
+      </Modal>
+
+      <Modal visible={noteModal !== null} transparent animationType="fade" onRequestClose={() => setNoteModal(null)}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.noteOverlay} onPress={() => setNoteModal(null)}>
+            <Pressable style={styles.noteModal} onPress={() => {}}>
+              <Text style={styles.tagTitle}>
+                {noteModal && (editExercises[noteModal.exIdx]?.name || 'Exercise')} — Note
+              </Text>
+              <TextInput
+                style={styles.noteInput}
+                placeholder="e.g. felt strong, increase next time"
+                placeholderTextColor={COLORS.textMuted}
+                value={noteInput}
+                onChangeText={setNoteInput}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                autoFocus
+              />
+              <View style={styles.noteActions}>
+                <TouchableOpacity style={styles.noteCancelBtn} onPress={() => setNoteModal(null)}>
+                  <Text style={styles.noteCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.noteSaveBtn} onPress={saveExerciseNote}>
+                  <Text style={styles.noteSaveText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={supersetPicker !== null} transparent animationType="fade">
@@ -817,6 +919,7 @@ const styles = StyleSheet.create({
   },
   viewExHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   exName: { color: COLORS.accent, fontWeight: '700', fontSize: 15, fontFamily: FONTS.bold },
+  exNote: { color: COLORS.textMuted, fontSize: 12, fontStyle: 'italic', marginTop: 4, fontFamily: FONTS.regular },
   supersetBadge: {
     backgroundColor: SET_COLORS.superset + '22',
     borderRadius: 6,
@@ -924,6 +1027,46 @@ const styles = StyleSheet.create({
   pickerEmpty: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular, textAlign: 'center', paddingVertical: 12 },
   pickerHint: { color: COLORS.textMuted, fontSize: 11, fontFamily: FONTS.regular, marginLeft: 8 },
   tagTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 12, textAlign: 'center' },
+  noteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  noteModal: {
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  noteInput: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 14,
+    color: COLORS.text,
+    minHeight: 90,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    fontSize: 15,
+    fontFamily: FONTS.regular,
+    marginBottom: 14,
+  },
+  noteActions: { flexDirection: 'row', gap: 10 },
+  noteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+  },
+  noteCancelText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.semiBold },
+  noteSaveBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+  },
+  noteSaveText: { color: '#000', fontSize: 14, fontFamily: FONTS.bold },
   tagOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
   tagDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
   tagOptionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular, flex: 1 },

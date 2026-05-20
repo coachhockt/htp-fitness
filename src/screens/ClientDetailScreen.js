@@ -265,7 +265,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   async function sendNotification(method, remaining) {
     const firstName = client.firstName || client.name?.split(' ')[0] || 'there';
     const plural = remaining === 1 ? 'session' : 'sessions';
-    const body = `Hi ${firstName}, Awesome Work today! You have ${remaining} training ${plural} left.`;
+    const body = `Hi ${firstName}, Awesome Work today! You have ${remaining} training ${plural} left.\n\n-HTPerformance`;
     let url;
     if (method === 'sms') {
       const phone = client.phone.replace(/[^0-9+]/g, '');
