@@ -84,8 +84,10 @@ export function AuthProvider({ children }) {
           await updateDoc(userDocRef, { failedAttempts: 0, lockUntil: null });
         }
       }
-      if (userData.status === 'frozen') { await signOut(getAuth()); throw new Error('Your account has been frozen. Contact admin.'); }
-      if (userData.status === 'closed') { await signOut(getAuth()); throw new Error('Your account has been closed.'); }
+      if (userData.category === 'inactive' || userData.status === 'closed') {
+        await signOut(getAuth());
+        throw new Error('Your account is inactive. Contact admin.');
+      }
       // Reset failed attempts on successful login
       await updateDoc(userDocRef, { failedAttempts: 0, lockUntil: null });
     } else {
@@ -94,6 +96,8 @@ export function AuthProvider({ children }) {
         email: data.email,
         role,
         status: 'active',
+        category: 'active',
+        isNew: true,
         createdAt: new Date().toISOString(),
         failedAttempts: 0,
         lockUntil: null,
@@ -134,6 +138,8 @@ export function AuthProvider({ children }) {
       email: data.email,
       role,
       status: 'active',
+      category: 'active',
+      isNew: true,
       createdAt: new Date().toISOString(),
       failedAttempts: 0,
       lockUntil: null,

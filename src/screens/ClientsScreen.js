@@ -28,6 +28,7 @@ export default function ClientsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
   const [sessionCounts, setSessionCounts] = useState({});
+  const [appUsers, setAppUsers] = useState([]);
 
   useEffect(() => {
     const q = query(collection(db, 'clients'), where('trainerId', '==', user.uid));
@@ -35,6 +36,16 @@ export default function ClientsScreen({ navigation }) {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       setClients(list);
+    });
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'users'), where('category', '==', 'active'));
+    return onSnapshot(q, (snap) => {
+      const list = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(u => u.id !== user.uid);
+      setAppUsers(list);
     });
   }, []);
 
@@ -102,8 +113,34 @@ export default function ClientsScreen({ navigation }) {
     );
   }
 
-  const filtered = clients.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase())
+  const clientIdSet = new Set(clients.map(c => c.id));
+  const userIdSet = new Set(appUsers.map(u => u.id));
+
+  const usersWithoutShadow = appUsers
+    .filter(u => !clientIdSet.has(u.id))
+    .map(u => ({
+      id: u.id,
+      isAppUser: true,
+      isShadowOnly: true,
+      email: u.email,
+      firstName: u.profile?.firstName || null,
+      lastName: u.profile?.lastName || null,
+      name: u.profile?.fullName || u.email,
+      age: u.profile?.age || null,
+      bodyWeight: u.profile?.bodyWeight || null,
+      bodyFat: u.profile?.bodyFat || null,
+    }));
+
+  const clientsWithSource = clients.map(c => ({
+    ...c,
+    isAppUser: userIdSet.has(c.id),
+  }));
+
+  const merged = [...clientsWithSource, ...usersWithoutShadow]
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  const filtered = merged.filter(c =>
+    (c.name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -147,12 +184,19 @@ export default function ClientsScreen({ navigation }) {
             onPress={() => navigation.navigate('ClientDetail', { clientId: item.id, name: item.name })}
           >
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{item.firstName?.[0]?.toUpperCase() || item.name[0].toUpperCase()}{item.lastName?.[0]?.toUpperCase() || ''}</Text>
+              <Text style={styles.avatarText}>{item.firstName?.[0]?.toUpperCase() || item.name?.[0]?.toUpperCase() || '?'}{item.lastName?.[0]?.toUpperCase() || ''}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.name}>
-                {item.name}{item.age ? `, ${item.age}` : ''}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {item.name}{item.age ? `, ${item.age}` : ''}
+                </Text>
+                {item.isAppUser && (
+                  <View style={styles.appBadge}>
+                    <Text style={styles.appBadgeText}>APP</Text>
+                  </View>
+                )}
+              </View>
               {(() => {
                 const remaining = getSessionsRemaining(item, sessionCounts[item.id] || 0);
                 if (typeof remaining !== 'number') return null;
@@ -168,13 +212,15 @@ export default function ClientsScreen({ navigation }) {
                 );
               })()}
             </View>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => handleDeleteClient(item)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.deleteBtnText}>✕</Text>
-            </TouchableOpacity>
+            {!item.isShadowOnly && (
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDeleteClient(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={styles.deleteBtnText}>✕</Text>
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -341,7 +387,21 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   avatarText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
-  name: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
+  name: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold, flexShrink: 1 },
+  appBadge: {
+    backgroundColor: COLORS.accent + '22',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+  appBadgeText: {
+    color: COLORS.accent,
+    fontSize: 9,
+    fontFamily: FONTS.extraBold,
+    letterSpacing: 0.5,
+  },
   sessionCount: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, fontFamily: FONTS.regular },
   phone: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, fontFamily: FONTS.regular },
   deleteBtn: {

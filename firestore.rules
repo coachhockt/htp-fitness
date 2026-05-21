@@ -32,14 +32,17 @@ service cloud.firestore {
         );
 
       // Users can update their own doc (profile, body metrics)
-      // But cannot change their own role, email, or status
-      // Admin can update any user doc (freeze/close accounts)
+      // But cannot change their own role, email, status, category, or isNew.
+      // category gates login (inactive = blocked), so only admin may change it.
+      // Admin can update any user doc (move between active/online/inactive).
       allow update: if isSignedIn()
         && (
           (request.auth.uid == userId
             && request.resource.data.role == resource.data.role
             && request.resource.data.email == resource.data.email
-            && request.resource.data.status == resource.data.status)
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.get('category', null) == resource.data.get('category', null)
+            && request.resource.data.get('isNew', null) == resource.data.get('isNew', null))
           || isAdmin()
         );
 

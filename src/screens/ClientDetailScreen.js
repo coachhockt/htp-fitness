@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import {
   collection, query, where, orderBy, onSnapshot,
-  doc, deleteDoc, getDoc, updateDoc, addDoc, serverTimestamp,
+  doc, deleteDoc, getDoc, updateDoc, setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
@@ -55,14 +55,46 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [editingPurchaseIndex, setEditingPurchaseIndex] = useState(null);
 
   useEffect(() => {
-    getDoc(doc(db, 'clients', clientId)).then(d => {
-      if (d.exists()) {
-        const data = { id: d.id, ...d.data() };
+    (async () => {
+      const clientSnap = await getDoc(doc(db, 'clients', clientId));
+      if (clientSnap.exists()) {
+        const data = { id: clientSnap.id, ...clientSnap.data() };
         setClient(data);
         navigation.setOptions({ title: data.name });
+        return;
       }
-    });
+      const userSnap = await getDoc(doc(db, 'users', clientId));
+      if (userSnap.exists()) {
+        const u = userSnap.data();
+        const p = u.profile || {};
+        const synthetic = {
+          id: clientId,
+          _fromUser: true,
+          firstName: p.firstName || null,
+          lastName: p.lastName || null,
+          name: p.fullName || u.email,
+          email: u.email,
+          phone: '',
+          age: p.age || null,
+          bodyWeight: p.bodyWeight || null,
+          bodyFat: p.bodyFat || null,
+          bodyHistory: p.bodyHistory || [],
+          weightUpdatedAt: p.weightUpdatedAt || null,
+          fatUpdatedAt: p.fatUpdatedAt || null,
+          note: null,
+        };
+        setClient(synthetic);
+        navigation.setOptions({ title: synthetic.name });
+      }
+    })();
   }, [clientId]);
+
+  function writePatch(patch) {
+    const base = client?._fromUser
+      ? { trainerId: user.uid, email: client.email || null }
+      : {};
+    return setDoc(doc(db, 'clients', clientId), { ...base, ...patch }, { merge: true });
+  }
 
   useEffect(() => {
     const q = query(
@@ -210,8 +242,8 @@ export default function ClientDetailScreen({ route, navigation }) {
       }
       updated.bodyHistory = history;
     }
-    await updateDoc(doc(db, 'clients', clientId), updated);
-    setClient(prev => ({ ...prev, ...updated }));
+    await writePatch(updated);
+    setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
     navigation.setOptions({ title: updated.name });
     setEditModal(false);
   }
@@ -241,7 +273,7 @@ export default function ClientDetailScreen({ route, navigation }) {
             const newDeductions = (client.manualDeductions || 0) + 1;
             const newRemaining = currentRemaining - 1;
             try {
-              await updateDoc(doc(db, 'clients', clientId), {
+              await writePatch({
                 manualDeductions: newDeductions,
                 manualDeductionsUpdatedAt: new Date().toISOString(),
                 sessionsRemaining: newRemaining,
@@ -249,6 +281,7 @@ export default function ClientDetailScreen({ route, navigation }) {
               });
               setClient(prev => ({
                 ...prev,
+                _fromUser: false,
                 manualDeductions: newDeductions,
                 sessionsRemaining: newRemaining,
               }));
@@ -311,11 +344,11 @@ export default function ClientDetailScreen({ route, navigation }) {
     }
     setSessionsSaving(true);
     try {
-      await updateDoc(doc(db, 'clients', clientId), {
+      await writePatch({
         sessionsRemaining: n,
         sessionsRemainingUpdatedAt: new Date().toISOString(),
       });
-      setClient(prev => ({ ...prev, sessionsRemaining: n }));
+      setClient(prev => ({ ...prev, _fromUser: false, sessionsRemaining: n }));
       setSessionsModal(false);
     } catch (e) {
       Alert.alert('Error', e.message);
@@ -379,12 +412,12 @@ export default function ClientDetailScreen({ route, navigation }) {
         newPurchases = client.purchases.map((p, i) => i === editingPurchaseIndex ? entry : p);
         newRemaining = currentRemaining + (sessionsCount - (old?.sessions || 0));
       }
-      await updateDoc(doc(db, 'clients', clientId), {
+      await writePatch({
         purchases: newPurchases,
         sessionsRemaining: newRemaining,
         sessionsRemainingUpdatedAt: new Date().toISOString(),
       });
-      setClient(prev => ({ ...prev, purchases: newPurchases, sessionsRemaining: newRemaining }));
+      setClient(prev => ({ ...prev, _fromUser: false, purchases: newPurchases, sessionsRemaining: newRemaining }));
       setPurchaseModal(false);
       setEditingPurchaseIndex(null);
     } catch (e) {
@@ -419,7 +452,7 @@ export default function ClientDetailScreen({ route, navigation }) {
       const newPurchases = client.purchases.filter((_, i) => i !== index);
       const currentRemaining = getSessionsRemaining(client, sessions.length) || 0;
       const newRemaining = currentRemaining - (old.sessions || 0);
-      await updateDoc(doc(db, 'clients', clientId), {
+      await writePatch({
         purchases: newPurchases,
         sessionsRemaining: newRemaining,
         sessionsRemainingUpdatedAt: new Date().toISOString(),
