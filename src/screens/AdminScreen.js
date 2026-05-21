@@ -8,19 +8,22 @@ import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
 
+// Stored category values are kept terse; this maps them to display labels.
+const CATEGORY_LABELS = { inPerson: 'In-Person', online: 'Online', inactive: 'Inactive' };
+
 function getCategory(u) {
-  if (u.category === 'inactive' || u.category === 'online' || u.category === 'active') {
+  if (u.category === 'inactive' || u.category === 'online' || u.category === 'inPerson') {
     return u.category;
   }
-  // Legacy users default to active per migration request.
-  return 'active';
+  // Legacy users (and any stale 'active' values) default to In-Person.
+  return 'inPerson';
 }
 
 export default function AdminScreen() {
   const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('active'); // 'active' | 'online' | 'inactive'
+  const [tab, setTab] = useState('inPerson'); // 'inPerson' | 'online' | 'inactive'
   const [moveMenu, setMoveMenu] = useState(null); // { userId, email, currentCategory }
 
   useEffect(() => {
@@ -63,21 +66,21 @@ export default function AdminScreen() {
     );
   }
 
-  const counts = { active: 0, online: 0, inactive: 0 };
+  const counts = { inPerson: 0, online: 0, inactive: 0 };
   users.forEach(u => { counts[getCategory(u)]++; });
   const visible = users.filter(u => getCategory(u) === tab);
 
   return (
     <View style={styles.container}>
       <View style={styles.tabBar}>
-        {['active', 'online', 'inactive'].map(t => (
+        {['inPerson', 'online', 'inactive'].map(t => (
           <TouchableOpacity
             key={t}
             style={[styles.tab, tab === t && styles.tabActive]}
             onPress={() => setTab(t)}
           >
             <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t.charAt(0).toUpperCase() + t.slice(1)} ({counts[t]})
+              {CATEGORY_LABELS[t]} ({counts[t]})
             </Text>
           </TouchableOpacity>
         ))}
@@ -122,7 +125,7 @@ export default function AdminScreen() {
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>
-            No accounts in {tab.charAt(0).toUpperCase() + tab.slice(1)}.
+            No accounts in {CATEGORY_LABELS[tab]}.
           </Text>
         }
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
@@ -134,7 +137,7 @@ export default function AdminScreen() {
             <Text style={styles.menuTitle} numberOfLines={1}>
               Move {moveMenu?.email}
             </Text>
-            {['active', 'online', 'inactive'].map(c => {
+            {['inPerson', 'online', 'inactive'].map(c => {
               const disabled = c === moveMenu?.currentCategory;
               return (
                 <TouchableOpacity
@@ -144,7 +147,7 @@ export default function AdminScreen() {
                   onPress={() => moveTo(moveMenu.userId, c)}
                 >
                   <Text style={[styles.menuOptionText, disabled && styles.menuOptionTextDisabled]}>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}{disabled ? '  (current)' : ''}
+                    {CATEGORY_LABELS[c]}{disabled ? '  (current)' : ''}
                   </Text>
                 </TouchableOpacity>
               );

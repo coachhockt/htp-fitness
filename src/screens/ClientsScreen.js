@@ -40,7 +40,7 @@ export default function ClientsScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    const q = query(collection(db, 'users'), where('category', '==', 'active'));
+    const q = query(collection(db, 'users'), where('category', '==', 'inPerson'));
     return onSnapshot(q, (snap) => {
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
