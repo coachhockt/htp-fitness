@@ -33,7 +33,7 @@ export default function ClientsScreen({ navigation }) {
     const q = query(collection(db, 'clients'), where('trainerId', '==', user.uid));
     return onSnapshot(q, (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => a.name.localeCompare(b.name));
+      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       setClients(list);
     });
   }, []);

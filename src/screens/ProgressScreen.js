@@ -119,9 +119,10 @@ export default function ProgressScreen({ route, navigation }) {
       .filter(s => s.exercises?.some(ex => ex.name === selected))
       .map(s => {
         const ex = s.exercises.find(e => e.name === selected);
-        const maxWeight = Math.max(...ex.sets.map(set => set.weight || 0));
-        const totalVol = ex.sets.reduce((sum, set) => sum + set.weight * set.reps, 0);
-        const best1RM = Math.max(...ex.sets.map(set => estimate1RM(set.weight, set.reps)));
+        const sets = ex.sets || [];
+        const maxWeight = Math.max(...sets.map(set => set.weight || 0), 0);
+        const totalVol = sets.reduce((sum, set) => sum + (set.weight || 0) * (set.reps || 0), 0);
+        const best1RM = Math.max(...sets.map(set => estimate1RM(set.weight, set.reps)), 0);
         const d = s.date?.toDate ? s.date.toDate() : new Date(s.date);
         return { date: d, maxWeight, totalVol, best1RM: Math.round(best1RM) };
       })

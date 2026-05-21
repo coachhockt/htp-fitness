@@ -99,8 +99,10 @@ service cloud.firestore {
       allow read: if isSignedIn()
         && (resource.data.clientId == request.auth.uid || isAdmin());
 
-      // Any authenticated user can create (bookmark or admin assign)
-      allow create: if isSignedIn();
+      // Users can bookmark only for themselves (clientId == own uid).
+      // Admin can assign workouts to any client (clientId == client doc id).
+      allow create: if isSignedIn()
+        && (request.resource.data.clientId == request.auth.uid || isAdmin());
 
       // Owner or admin can update/delete
       allow update, delete: if isSignedIn()

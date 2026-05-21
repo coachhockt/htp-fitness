@@ -17,7 +17,7 @@ export default function AdminScreen() {
       const list = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .filter(u => u.id !== user.uid);
-      list.sort((a, b) => a.email.localeCompare(b.email));
+      list.sort((a, b) => (a.email || '').localeCompare(b.email || ''));
       setUsers(list);
       setLoading(false);
     });

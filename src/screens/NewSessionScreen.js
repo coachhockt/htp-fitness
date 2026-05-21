@@ -208,6 +208,7 @@ export default function NewSessionScreen({ route, navigation }) {
   const [newExerciseName, setNewExerciseName] = useState('');
   const [saving, setSaving] = useState(false);
   const [pastExercises, setPastExercises] = useState([]);
+  const [pastBest, setPastBest] = useState({}); // lowercase name -> { date, weight, reps, unit }
   const [suggestions, setSuggestions] = useState([]);
   const [tagMenu, setTagMenu] = useState(null); // { exIdx, setIdx }
   const [exerciseMenu, setExerciseMenu] = useState(null); // { exIdx }
@@ -220,8 +221,42 @@ export default function NewSessionScreen({ route, navigation }) {
       const q = query(collection(db, 'sessions'), where('clientId', '==', clientId));
       const snap = await getDocs(q);
       const names = new Set();
-      snap.docs.forEach(d => d.data().exercises?.forEach(ex => names.add(ex.name)));
-      setPastExercises([...names].sort());
+      const best = {};
+
+      const sessions = snap.docs
+        .map(d => {
+          const data = d.data();
+          const date = data.date?.toDate ? data.date.toDate() : new Date(data.date);
+          return { date, exercises: data.exercises || [] };
+        })
+        .filter(s => s.date && !isNaN(s.date.getTime()))
+        .sort((a, b) => b.date - a.date);
+
+      for (const s of sessions) {
+        for (const ex of s.exercises) {
+          names.add(ex.name);
+          const key = ex.name?.toLowerCase().trim();
+          if (!key || best[key]) continue;
+          let heaviest = null;
+          for (const set of (ex.sets || [])) {
+            const w = set.weight == null ? 0 : set.weight;
+            if (!heaviest || w > (heaviest.weight == null ? 0 : heaviest.weight)) {
+              heaviest = set;
+            }
+          }
+          if (heaviest) {
+            best[key] = {
+              date: s.date,
+              weight: heaviest.weight,
+              reps: heaviest.reps,
+              unit: ex.unit || 'reps',
+            };
+          }
+        }
+      }
+
+      setPastExercises([...names].filter(Boolean).sort());
+      setPastBest(best);
     }
     loadPast();
   }, [clientId]);
@@ -605,6 +640,18 @@ export default function NewSessionScreen({ route, navigation }) {
             <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
               <Text style={styles.addSetText}>+ Add Set</Text>
             </TouchableOpacity>
+            {(() => {
+              const best = pastBest[ex.name?.toLowerCase().trim()];
+              if (!best) return null;
+              const wStr = best.weight == null || best.weight === 0 ? 'B.W.' : `${best.weight} lbs`;
+              const rStr = best.unit === 'seconds' ? `${best.reps} sec` : best.reps;
+              const dStr = best.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              return (
+                <Text style={styles.lastBestText}>
+                  Last: {wStr} × {rStr} · {dStr}
+                </Text>
+              );
+            })()}
           </View>
           );
         })}
@@ -862,6 +909,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 4,
     fontFamily: FONTS.regular,
+  },
+  lastBestText: {
+    color: COLORS.accent,
+    fontSize: 12,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    fontFamily: FONTS.semiBold,
   },
   supersetBadge: {
     backgroundColor: SET_COLORS.superset + '22',
