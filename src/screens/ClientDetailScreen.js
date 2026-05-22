@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
   Modal, Pressable, TextInput, KeyboardAvoidingView, Platform,
@@ -12,7 +12,8 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { getLastBodyEditDate, formatLastEdited, getSessionsRemaining } from '../utils';
+import { getLastBodyEditDate, formatLastEdited, getSessionsRemaining, titleCaseExercise } from '../utils';
+import { getExerciseSuggestions } from '../exercises';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PAGE_SIZE = 10;
@@ -42,6 +43,8 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [assignNote, setAssignNote] = useState('');
   const [assignExercises, setAssignExercises] = useState([{ name: '', sets: [{ weight: '', reps: '' }] }]);
   const [assignSaving, setAssignSaving] = useState(false);
+  const [assignSuggestionIdx, setAssignSuggestionIdx] = useState(null); // which exercise row is showing suggestions
+  const [assignSuggestions, setAssignSuggestions] = useState([]);
   const [sessionsModal, setSessionsModal] = useState(false);
   const [sessionsInput, setSessionsInput] = useState('');
   const [sessionsSaving, setSessionsSaving] = useState(false);
@@ -106,6 +109,17 @@ export default function ClientDetailScreen({ route, navigation }) {
       setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
   }, [clientId]);
+
+  // Exercise names this client has logged before — used to rank Assign Workout suggestions.
+  const pastExercises = useMemo(() => {
+    const names = new Set();
+    for (const s of sessions) {
+      for (const ex of (s.exercises || [])) {
+        if (ex?.name) names.add(ex.name);
+      }
+    }
+    return [...names].sort();
+  }, [sessions]);
 
   function formatDate(ts) {
     if (!ts) return 'In progress';
@@ -467,6 +481,8 @@ export default function ClientDetailScreen({ route, navigation }) {
     setAssignTitle('');
     setAssignNote('');
     setAssignExercises([{ name: '', sets: [{ weight: '', reps: '' }] }]);
+    setAssignSuggestionIdx(null);
+    setAssignSuggestions([]);
     setAssignModal(true);
   }
 
@@ -480,6 +496,14 @@ export default function ClientDetailScreen({ route, navigation }) {
 
   function updateAssignExName(idx, val) {
     setAssignExercises(prev => prev.map((ex, i) => i === idx ? { ...ex, name: val } : ex));
+    setAssignSuggestionIdx(idx);
+    setAssignSuggestions(getExerciseSuggestions(val, pastExercises));
+  }
+
+  function applyAssignSuggestion(idx, name) {
+    setAssignExercises(prev => prev.map((ex, i) => i === idx ? { ...ex, name } : ex));
+    setAssignSuggestionIdx(null);
+    setAssignSuggestions([]);
   }
 
   function addAssignSet(exIdx) {
@@ -511,7 +535,7 @@ export default function ClientDetailScreen({ route, navigation }) {
     const validExercises = assignExercises
       .filter(ex => ex.name.trim())
       .map(ex => ({
-        name: ex.name.trim(),
+        name: titleCaseExercise(ex.name),
         sets: ex.sets.map(s => ({
           weight: s.weight ? parseFloat(s.weight) : 0,
           reps: s.reps ? parseInt(s.reps) : 0,
@@ -1163,6 +1187,22 @@ export default function ClientDetailScreen({ route, navigation }) {
                         </TouchableOpacity>
                       )}
                     </View>
+                    {assignSuggestionIdx === exIdx && assignSuggestions.length > 0 && (
+                      <View style={styles.suggestionsBox}>
+                        {assignSuggestions.map((s, i) => (
+                          <TouchableOpacity
+                            key={i}
+                            style={styles.suggestionItem}
+                            onPress={() => applyAssignSuggestion(exIdx, s)}
+                          >
+                            <Text style={styles.suggestionText}>{s}</Text>
+                            {pastExercises.includes(s) && (
+                              <Text style={styles.suggestionBadge}>recent</Text>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
                     {ex.sets.map((set, setIdx) => (
                       <View key={setIdx} style={styles.assignSetRow}>
                         <Text style={styles.assignSetLabel}>Set {setIdx + 1}</Text>
@@ -1695,6 +1735,32 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  suggestionsBox: {
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginTop: 6,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+  },
+  suggestionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular },
+  suggestionBadge: {
+    color: COLORS.accent,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontFamily: FONTS.bold,
   },
   assignSetRow: {
     flexDirection: 'row',

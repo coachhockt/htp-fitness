@@ -10,26 +10,8 @@ const SET_COLORS = {
   superset: '#4A90D9',
 };
 
-const COMMON_EXERCISES = [
-  'Bench Press', 'Incline Bench Press', 'Decline Bench Press',
-  'DB Bench Press', 'DB Incline Bench Press', 'DB Fly', 'DB Incline Fly',
-  'Squat', 'Back Squat', 'Front Squat', 'Goblet Squat', 'Bulgarian Split Squat',
-  'Deadlift', 'Sumo Deadlift', 'Romanian Deadlift', 'DB Romanian Deadlift',
-  'Overhead Press', 'DB Shoulder Press', 'Arnold Press', 'Lateral Raise', 'DB Lateral Raise',
-  'Barbell Row', 'BB Row', 'DB Row', 'Pendlay Row', 'Seated Cable Row', 'T-Bar Row',
-  'Pull Up', 'Chin Up', 'Lat Pulldown',
-  'Barbell Curl', 'BB Curl', 'DB Curl', 'Hammer Curl', 'Preacher Curl', 'EZ Bar Curl',
-  'Tricep Pushdown', 'Skull Crusher', 'Tricep Dip', 'Overhead Tricep Extension',
-  'Leg Press', 'Leg Curl', 'Leg Extension', 'Hip Thrust', 'Calf Raise',
-  'Cable Fly', 'Face Pull', 'Shrug', 'DB Shrug',
-];
-
-const ABBREVIATIONS = {
-  'db': 'dumbbell', 'bb': 'barbell', 'ez': 'ez bar',
-  'ohp': 'overhead press', 'rdl': 'romanian deadlift',
-  'bp': 'bench press', 'dl': 'deadlift', 'sq': 'squat',
-};
 import { db } from '../../firebase';
+import { getExerciseSuggestions } from '../exercises';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc, addDoc, deleteDoc, Timestamp, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -160,25 +142,7 @@ export default function SessionDetailScreen({ route, navigation }) {
   }, [session?.clientId, sessionId]);
 
   function getExSuggestions(text) {
-    if (!text.trim()) return [];
-    const lower = text.toLowerCase();
-    let expandedTerms = [lower];
-    for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
-      if (lower.includes(abbr)) expandedTerms.push(lower.replace(abbr, full));
-    }
-    const allExercises = [...new Set([...pastExercises, ...COMMON_EXERCISES])];
-    const matches = allExercises.filter(ex => {
-      const exLower = ex.toLowerCase();
-      return expandedTerms.some(term => exLower.includes(term)) ||
-        lower.split(' ').every(word => exLower.includes(word));
-    });
-    return matches.sort((a, b) => {
-      const aIsPast = pastExercises.includes(a);
-      const bIsPast = pastExercises.includes(b);
-      if (aIsPast && !bIsPast) return -1;
-      if (!aIsPast && bIsPast) return 1;
-      return a.localeCompare(b);
-    }).slice(0, 5);
+    return getExerciseSuggestions(text, pastExercises);
   }
 
   if (!session) return (
