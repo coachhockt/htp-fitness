@@ -445,6 +445,11 @@ export default function NewSessionScreen({ route, navigation }) {
             key={exIdx}
             style={[styles.exerciseCard, groupLabel && styles.supersetBorder]}
           >
+            {groupLabel && (
+              <View style={styles.supersetBadge}>
+                <Text style={styles.supersetBadgeText}>SUPERSET {groupLabel}</Text>
+              </View>
+            )}
             <View style={styles.exHeader}>
               <TouchableOpacity
                 style={styles.exNameBtn}
@@ -455,11 +460,6 @@ export default function NewSessionScreen({ route, navigation }) {
                   <Text style={styles.exName}>{ex.name}</Text>
                   <Ionicons name="chevron-down" size={14} color={COLORS.textMuted} />
                 </View>
-                {groupLabel && (
-                  <View style={styles.supersetBadge}>
-                    <Text style={styles.supersetBadgeText}>SUPERSET {groupLabel}</Text>
-                  </View>
-                )}
                 {ex.note ? (
                   <Text style={styles.exNote}>{ex.note}</Text>
                 ) : null}
@@ -787,10 +787,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.semiBold,
   },
   supersetBadge: {
+    alignSelf: 'flex-start',
     backgroundColor: SET_COLORS.superset + '22',
     borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
+    marginBottom: 8,
   },
   supersetBadgeText: {
     color: SET_COLORS.superset,
