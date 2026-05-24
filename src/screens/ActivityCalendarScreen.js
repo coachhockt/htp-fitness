@@ -8,6 +8,7 @@ import { db } from '../../firebase';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, addDoc, Timestamp, orderBy, onSnapshot, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
+import { handledNoAccess } from '../access';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { requestPermissions, scheduleWeeklyReminders, scheduleDateReminder } from '../utils/notifications';
 
@@ -180,24 +181,28 @@ export default function ActivityCalendarScreen({ navigation, route }) {
   }, [user.uid]);
 
   async function toggleBookmark(session) {
-    const existingDocId = bookmarkedIds[session.id];
-    if (existingDocId) {
-      await deleteDoc(doc(db, 'savedWorkouts', existingDocId));
-    } else {
-      const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
-      const title = exerciseNames.length > 0
-        ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
-        : 'Workout';
-      await addDoc(collection(db, 'savedWorkouts'), {
-        clientId: user.uid,
-        type: 'bookmark',
-        sessionId: session.id,
-        title,
-        exercises: session.exercises || [],
-        assignedBy: null,
-        createdAt: serverTimestamp(),
-        note: null,
-      });
+    try {
+      const existingDocId = bookmarkedIds[session.id];
+      if (existingDocId) {
+        await deleteDoc(doc(db, 'savedWorkouts', existingDocId));
+      } else {
+        const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
+        const title = exerciseNames.length > 0
+          ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
+          : 'Workout';
+        await addDoc(collection(db, 'savedWorkouts'), {
+          clientId: user.uid,
+          type: 'bookmark',
+          sessionId: session.id,
+          title,
+          exercises: session.exercises || [],
+          assignedBy: null,
+          createdAt: serverTimestamp(),
+          note: null,
+        });
+      }
+    } catch (e) {
+      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
     }
   }
 
@@ -221,7 +226,10 @@ export default function ActivityCalendarScreen({ navigation, route }) {
       `Delete the session from ${formatSessionDate(session.date)}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteDoc(doc(db, 'sessions', session.id)) },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          try { await deleteDoc(doc(db, 'sessions', session.id)); }
+          catch (e) { if (!handledNoAccess(e)) Alert.alert('Error', e.message); }
+        } },
       ]
     );
   }
@@ -427,7 +435,7 @@ export default function ActivityCalendarScreen({ navigation, route }) {
       const payload = { ...data, updatedAt: new Date().toISOString() };
       await setDoc(doc(db, 'schedules', user.uid), payload);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
       return;
     }
     // Attempt notifications separately — don't block schedule save

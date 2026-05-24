@@ -14,13 +14,14 @@ import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited, getSessionsRemaining, titleCaseExercise } from '../utils';
 import { getExerciseSuggestions } from '../exercises';
+import { showNoAccess, handledNoAccess } from '../access';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PAGE_SIZE = 10;
 
 export default function ClientDetailScreen({ route, navigation }) {
   const { clientId } = route.params;
-  const { user } = useAuth();
+  const { user, isInactive } = useAuth();
   const [client, setClient] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [page, setPage] = useState(0);
@@ -146,7 +147,13 @@ export default function ClientDetailScreen({ route, navigation }) {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => deleteDoc(doc(db, 'sessions', session.id)),
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, 'sessions', session.id));
+            } catch (e) {
+              if (!handledNoAccess(e)) Alert.alert('Error', e.message);
+            }
+          },
         },
       ]
     );
@@ -567,7 +574,7 @@ export default function ClientDetailScreen({ route, navigation }) {
       setAssignModal(false);
       Alert.alert('Success', `Workout assigned to ${name}.`);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
     } finally {
       setAssignSaving(false);
     }
@@ -698,7 +705,10 @@ export default function ClientDetailScreen({ route, navigation }) {
             <View style={styles.actions}>
               <TouchableOpacity
                 style={styles.primaryBtn}
-                onPress={() => navigation.navigate('NewSession', { clientId, name })}
+                onPress={() => {
+                  if (isInactive) { showNoAccess(); return; }
+                  navigation.navigate('NewSession', { clientId, name });
+                }}
               >
                 <Text style={styles.primaryBtnText}>+ New Session</Text>
               </TouchableOpacity>

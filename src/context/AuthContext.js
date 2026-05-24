@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { db, app } from '../../firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const AuthContext = createContext(null);
@@ -21,6 +21,26 @@ function getAuth() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isInactive, setIsInactive] = useState(false);
+
+  // Watch the logged-in user's own account doc so a mid-session deactivation
+  // (admin moves them to the 'inactive' category) is detected in real time.
+  // Mirrors the server-side isActive() rule so the client prediction matches.
+  React.useEffect(() => {
+    if (!user?.uid) {
+      setIsInactive(false);
+      return;
+    }
+    const unsub = onSnapshot(
+      doc(db, 'users', user.uid),
+      (snap) => {
+        const d = snap.data() || {};
+        setIsInactive(d.category === 'inactive' || d.status === 'closed');
+      },
+      () => {} // ignore listener errors (e.g. transient permission blips)
+    );
+    return unsub;
+  }, [user?.uid]);
 
   React.useEffect(() => {
     (async () => {
@@ -207,7 +227,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, saveProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, loading, isInactive, login, register, logout, saveProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

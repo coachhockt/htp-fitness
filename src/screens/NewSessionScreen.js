@@ -11,6 +11,7 @@ import { COLORS, FONTS } from '../theme';
 import { compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
+import { showNoAccess, handledNoAccess } from '../access';
 
 const SET_COLORS = {
   dropset: '#D4872A',
@@ -102,7 +103,7 @@ function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset, un
 
 export default function NewSessionScreen({ route, navigation }) {
   const { clientId, name } = route.params;
-  const { user } = useAuth();
+  const { user, isInactive } = useAuth();
   const [exercises, setExercises] = useState([]);
   const [newExerciseName, setNewExerciseName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -198,6 +199,8 @@ export default function NewSessionScreen({ route, navigation }) {
 
   async function saveAndGoBack() {
     if (saving) return;
+    // Deactivated mid-session: can't save, so just leave (don't trap them on the screen).
+    if (isInactive) { navigation.goBack(); return; }
     const cleaned = cleanupOrphanGroups(
       exercises
         .map(ex => ({
@@ -241,7 +244,7 @@ export default function NewSessionScreen({ route, navigation }) {
       });
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error saving', e.message);
+      if (!handledNoAccess(e)) Alert.alert('Error saving', e.message);
       setSaving(false);
     }
   }
@@ -376,6 +379,7 @@ export default function NewSessionScreen({ route, navigation }) {
   }
 
   async function saveSession() {
+    if (isInactive) { showNoAccess(); return; }
     if (exercises.length === 0) {
       Alert.alert('No exercises', 'Add at least one exercise before saving.');
       return;
@@ -424,7 +428,7 @@ export default function NewSessionScreen({ route, navigation }) {
       });
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', e.message);
+      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
       setSaving(false);
     }
   }

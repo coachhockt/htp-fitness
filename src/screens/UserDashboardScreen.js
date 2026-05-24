@@ -12,10 +12,11 @@ import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited } from '../utils';
+import { showNoAccess, handledNoAccess } from '../access';
 import ProfileMenu from '../components/ProfileMenu';
 
 export default function UserDashboardScreen({ navigation }) {
-  const { user, logout, saveProfile, changePassword } = useAuth();
+  const { user, isInactive, logout, saveProfile, changePassword } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [schedule, setSchedule] = useState(null);
   const [profileModal, setProfileModal] = useState(false);
@@ -130,7 +131,7 @@ export default function UserDashboardScreen({ navigation }) {
       updated.updatedAt = new Date().toISOString();
       await setDoc(doc(db, 'schedules', user.uid), updated);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
     }
   }
 
@@ -315,7 +316,10 @@ export default function UserDashboardScreen({ navigation }) {
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => navigation.navigate('NewSession', { clientId: user.uid, name: profile.fullName || 'My Session' })}
+        onPress={() => {
+          if (isInactive) { showNoAccess(); return; }
+          navigation.navigate('NewSession', { clientId: user.uid, name: profile.fullName || 'My Session' });
+        }}
       >
         <Text style={styles.fabText}>Start Training</Text>
       </TouchableOpacity>

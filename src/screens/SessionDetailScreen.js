@@ -12,6 +12,7 @@ const SET_COLORS = {
 
 import { db } from '../../firebase';
 import { getExerciseSuggestions } from '../exercises';
+import { showNoAccess, handledNoAccess } from '../access';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc, addDoc, deleteDoc, Timestamp, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -21,7 +22,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SessionDetailScreen({ route, navigation }) {
   const { sessionId, savedWorkout } = route.params;
-  const { user } = useAuth();
+  const { user, isInactive } = useAuth();
   const [session, setSession] = useState(null);
   const [editing, setEditing] = useState(false);
   const [bookmarkDocId, setBookmarkDocId] = useState(null);
@@ -89,7 +90,7 @@ export default function SessionDetailScreen({ route, navigation }) {
       }
     } catch (err) {
       console.error('[toggleBookmark]', err);
-      Alert.alert('Bookmark failed', err?.message ?? 'Unknown error');
+      if (!handledNoAccess(err)) Alert.alert('Bookmark failed', err?.message ?? 'Unknown error');
     }
   }
 
@@ -325,6 +326,7 @@ export default function SessionDetailScreen({ route, navigation }) {
   }
 
   async function saveEdits() {
+    if (isInactive) { showNoAccess(); return; }
     if (!editDate || isNaN(editDate.getTime())) {
       Alert.alert('Invalid date', 'Please select a valid date.');
       return;
@@ -371,7 +373,7 @@ export default function SessionDetailScreen({ route, navigation }) {
       }));
       setEditing(false);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
     } finally {
       setSaving(false);
     }
