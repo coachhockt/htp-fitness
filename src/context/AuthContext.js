@@ -67,29 +67,15 @@ export function AuthProvider({ children }) {
     // Sign into Firebase Auth SDK so Firestore rules can verify identity
     await signInWithEmailAndPassword(getAuth(), email, password);
 
-    // Now that we're authenticated, check lockout and track failed attempts
+    // Now that we're authenticated, verify the account is still active
     const userDocRef = doc(db, 'users', data.localId);
     const userDocSnap = await getDoc(userDocRef);
     if (userDocSnap.exists()) {
       const userData = userDocSnap.data();
-      // Check lockout
-      if (userData.lockUntil) {
-        const lockTime = new Date(userData.lockUntil).getTime();
-        const now = Date.now();
-        if (now < lockTime) {
-          const minsLeft = Math.ceil((lockTime - now) / 60000);
-          await signOut(getAuth());
-          throw new Error(`Account locked. Try again in ${minsLeft} minute${minsLeft !== 1 ? 's' : ''}.`);
-        } else {
-          await updateDoc(userDocRef, { failedAttempts: 0, lockUntil: null });
-        }
-      }
       if (userData.category === 'inactive' || userData.status === 'closed') {
         await signOut(getAuth());
         throw new Error('Your account is inactive. Contact admin.');
       }
-      // Reset failed attempts on successful login
-      await updateDoc(userDocRef, { failedAttempts: 0, lockUntil: null });
     } else {
       const role = data.email === ADMIN_EMAIL ? 'admin' : 'user';
       await setDoc(userDocRef, {
@@ -99,8 +85,6 @@ export function AuthProvider({ children }) {
         category: 'inPerson',
         isNew: true,
         createdAt: new Date().toISOString(),
-        failedAttempts: 0,
-        lockUntil: null,
       });
     }
 
@@ -141,8 +125,6 @@ export function AuthProvider({ children }) {
       category: 'inPerson',
       isNew: true,
       createdAt: new Date().toISOString(),
-      failedAttempts: 0,
-      lockUntil: null,
     };
     try {
       await setDoc(doc(db, 'users', data.localId), userDoc);

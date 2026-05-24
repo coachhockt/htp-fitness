@@ -56,17 +56,23 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [purchaseSaving, setPurchaseSaving] = useState(false);
   const [historyModal, setHistoryModal] = useState(false);
   const [editingPurchaseIndex, setEditingPurchaseIndex] = useState(null);
+  const [isAppUser, setIsAppUser] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const clientSnap = await getDoc(doc(db, 'clients', clientId));
+      const [clientSnap, userSnap] = await Promise.all([
+        getDoc(doc(db, 'clients', clientId)),
+        getDoc(doc(db, 'users', clientId)),
+      ]);
+      // Linked to an app account iff a users/{clientId} doc exists (clientId is a UID).
+      // This is independent of any clients/{uid} doc that editing an app user creates.
+      setIsAppUser(userSnap.exists());
       if (clientSnap.exists()) {
         const data = { id: clientSnap.id, ...clientSnap.data() };
         setClient(data);
         navigation.setOptions({ title: data.name });
         return;
       }
-      const userSnap = await getDoc(doc(db, 'users', clientId));
       if (userSnap.exists()) {
         const u = userSnap.data();
         const p = u.profile || {};
@@ -478,6 +484,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   }
 
   function openAssignModal() {
+    if (!isAppUser) return;
     setAssignTitle('');
     setAssignNote('');
     setAssignExercises([{ name: '', sets: [{ weight: '', reps: '' }] }]);
@@ -702,10 +709,17 @@ export default function ClientDetailScreen({ route, navigation }) {
                 <Text style={styles.secondaryBtnText}>View Progress</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.assignBtn} onPress={openAssignModal}>
-              <Ionicons name="barbell-outline" size={18} color={COLORS.accent} />
-              <Text style={styles.assignBtnText}>Assign Workout</Text>
+            <TouchableOpacity
+              style={[styles.assignBtn, !isAppUser && styles.assignBtnDisabled]}
+              onPress={openAssignModal}
+              disabled={!isAppUser}
+            >
+              <Ionicons name="barbell-outline" size={18} color={isAppUser ? COLORS.accent : COLORS.textMuted} />
+              <Text style={[styles.assignBtnText, !isAppUser && styles.assignBtnTextDisabled]}>Assign Workout</Text>
             </TouchableOpacity>
+            {!isAppUser && (
+              <Text style={styles.assignHint}>This client needs an app account to receive assigned workouts.</Text>
+            )}
             <Text style={styles.sectionLabel}>Session History</Text>
 
             {/* Date Range Search */}
@@ -1713,6 +1727,21 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontSize: 14,
     fontFamily: FONTS.semiBold,
+  },
+  assignBtnDisabled: {
+    borderColor: COLORS.border,
+    opacity: 0.6,
+    marginBottom: 8,
+  },
+  assignBtnTextDisabled: {
+    color: COLORS.textMuted,
+  },
+  assignHint: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    textAlign: 'center',
+    marginBottom: 28,
   },
   centerBackdrop: {
     flex: 1,

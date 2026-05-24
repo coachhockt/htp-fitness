@@ -3,15 +3,27 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper: the requesting user's own /users doc data
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     // Helper: check if the requesting user is the admin
     function isAdmin() {
-      return request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return request.auth != null && userData().role == 'admin';
     }
 
     // Helper: check if user is authenticated
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    // Helper: account is not deactivated. Legacy docs without category/status
+    // default to active (matches getCategory() in AdminScreen).
+    function isActive() {
+      return request.auth != null
+        && userData().get('category', 'inPerson') != 'inactive'
+        && userData().get('status', 'active') != 'closed';
     }
 
     // ─── USERS COLLECTION ───
@@ -38,6 +50,7 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && (
           (request.auth.uid == userId
+            && isActive()
             && request.resource.data.role == resource.data.role
             && request.resource.data.email == resource.data.email
             && request.resource.data.status == resource.data.status
@@ -72,18 +85,21 @@ service cloud.firestore {
       // Trainers can read sessions they created OR sessions where they are the client
       // Admin can read any session
       allow read: if isSignedIn()
+        && isActive()
         && (resource.data.trainerId == request.auth.uid
             || resource.data.clientId == request.auth.uid
             || isAdmin());
 
       // Trainers can create sessions assigned to themselves
       allow create: if isSignedIn()
-        && request.resource.data.trainerId == request.auth.uid;
+        && request.resource.data.trainerId == request.auth.uid
+        && isActive();
 
       // Trainers can update/delete sessions they created
       // Users can delete their own sessions (clientId == uid)
       // Admin can update/delete any session
       allow update, delete: if isSignedIn()
+        && isActive()
         && (resource.data.trainerId == request.auth.uid
             || resource.data.clientId == request.auth.uid
             || isAdmin());
@@ -92,7 +108,8 @@ service cloud.firestore {
     // ─── SCHEDULES COLLECTION ───
     match /schedules/{userId} {
       allow read, create, update: if isSignedIn()
-        && request.auth.uid == userId;
+        && request.auth.uid == userId
+        && isActive();
       allow delete: if false;
     }
 
@@ -100,15 +117,18 @@ service cloud.firestore {
     match /savedWorkouts/{docId} {
       // Users can read their own saved workouts; admin can read any
       allow read: if isSignedIn()
+        && isActive()
         && (resource.data.clientId == request.auth.uid || isAdmin());
 
       // Users can bookmark only for themselves (clientId == own uid).
       // Admin can assign workouts to any client (clientId == client doc id).
       allow create: if isSignedIn()
+        && isActive()
         && (request.resource.data.clientId == request.auth.uid || isAdmin());
 
       // Owner or admin can update/delete
       allow update, delete: if isSignedIn()
+        && isActive()
         && (resource.data.clientId == request.auth.uid || isAdmin());
     }
 
