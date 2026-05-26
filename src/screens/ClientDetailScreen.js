@@ -2,43 +2,27 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert,
   Modal, Pressable, TextInput, KeyboardAvoidingView, Platform,
-  Keyboard, TouchableWithoutFeedback, ScrollView, Linking,
+  ScrollView, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import {
   collection, query, where, orderBy, onSnapshot,
-  doc, deleteDoc, getDoc, updateDoc, setDoc, addDoc, serverTimestamp,
+  doc, getDoc, setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { getLastBodyEditDate, formatLastEdited, getSessionsRemaining, titleCaseExercise } from '../utils';
+import { getSessionsRemaining, titleCaseExercise } from '../utils';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, handledNoAccess } from '../access';
-import DateTimePicker from '@react-native-community/datetimepicker';
-
-const PAGE_SIZE = 10;
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ClientDetailScreen({ route, navigation }) {
   const { clientId } = route.params;
   const { user, isInactive } = useAuth();
+  const insets = useSafeAreaInsets();
   const [client, setClient] = useState(null);
   const [sessions, setSessions] = useState([]);
-  const [page, setPage] = useState(0);
-  const [fromDate, setFromDate] = useState(null);
-  const [toDate, setToDate] = useState(null);
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
-  const [filtering, setFiltering] = useState(false);
-  const [editModal, setEditModal] = useState(false);
-  const [editFirst, setEditFirst] = useState('');
-  const [editLast, setEditLast] = useState('');
-  const [editPhone, setEditPhone] = useState('');
-  const [editEmail, setEditEmail] = useState('');
-  const [editAge, setEditAge] = useState('');
-  const [editWeight, setEditWeight] = useState('');
-  const [editFat, setEditFat] = useState('');
-  const [editNote, setEditNote] = useState('');
   const [assignModal, setAssignModal] = useState(false);
   const [assignTitle, setAssignTitle] = useState('');
   const [assignNote, setAssignNote] = useState('');
@@ -49,18 +33,10 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [sessionsModal, setSessionsModal] = useState(false);
   const [sessionsInput, setSessionsInput] = useState('');
   const [sessionsSaving, setSessionsSaving] = useState(false);
-  const [purchaseModal, setPurchaseModal] = useState(false);
-  const [purchaseDate, setPurchaseDate] = useState(new Date());
-  const [showPurchaseDatePicker, setShowPurchaseDatePicker] = useState(false);
-  const [purchaseSessions, setPurchaseSessions] = useState('');
-  const [purchasePrice, setPurchasePrice] = useState('');
-  const [purchaseSaving, setPurchaseSaving] = useState(false);
-  const [historyModal, setHistoryModal] = useState(false);
-  const [editingPurchaseIndex, setEditingPurchaseIndex] = useState(null);
   const [isAppUser, setIsAppUser] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    async function loadClient() {
       const [clientSnap, userSnap] = await Promise.all([
         getDoc(doc(db, 'clients', clientId)),
         getDoc(doc(db, 'users', clientId)),
@@ -96,7 +72,11 @@ export default function ClientDetailScreen({ route, navigation }) {
         setClient(synthetic);
         navigation.setOptions({ title: synthetic.name });
       }
-    })();
+    }
+    loadClient();
+    // Re-fetch when returning from the Profile screen so edits are reflected.
+    const unsubscribe = navigation.addListener('focus', loadClient);
+    return unsubscribe;
   }, [clientId]);
 
   function writePatch(patch) {
@@ -138,142 +118,7 @@ export default function ClientDetailScreen({ route, navigation }) {
     return session.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0) || 0;
   }
 
-  function confirmDelete(session) {
-    Alert.alert(
-      'Delete Session',
-      `Delete the session from ${formatDate(session.date)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'sessions', session.id));
-            } catch (e) {
-              if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-            }
-          },
-        },
-      ]
-    );
-  }
-
-  function applyDateFilter() {
-    if (!fromDate || !toDate) {
-      Alert.alert('Select Dates', 'Please select both a start and end date.');
-      return;
-    }
-    if (toDate < fromDate) {
-      Alert.alert('Invalid Range', 'End date must be after start date.');
-      return;
-    }
-    const diffDays = (toDate - fromDate) / (1000 * 60 * 60 * 24);
-    if (diffDays > 14) {
-      Alert.alert('Range Too Large', 'Maximum search range is 2 weeks.');
-      return;
-    }
-    setFiltering(true);
-    setPage(0);
-  }
-
-  function clearFilter() {
-    setFromDate(null);
-    setToDate(null);
-    setFiltering(false);
-    setPage(0);
-  }
-
-  function formatPickedDate(date) {
-    if (!date) return 'Select date';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  const filteredSessions = filtering
-    ? sessions.filter(s => {
-        if (!s.date) return false;
-        const d = s.date.toDate ? s.date.toDate() : new Date(s.date);
-        const to = new Date(toDate);
-        to.setHours(23, 59, 59, 999);
-        return d >= fromDate && d <= to;
-      })
-    : sessions;
-
-  const totalPages = Math.ceil(filteredSessions.length / PAGE_SIZE);
-  const pagedSessions = filteredSessions.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  function goToCurrentDate() {
-    if (filtering) { clearFilter(); }
-    setPage(0);
-  }
-
-  function openEditModal() {
-    setEditFirst(client.firstName || client.name?.split(' ')[0] || '');
-    setEditLast(client.lastName || client.name?.split(' ').slice(1).join(' ') || '');
-    setEditPhone(client.phone || '');
-    setEditEmail(client.email || '');
-    setEditAge(client.age ? String(client.age) : '');
-    setEditWeight(client.bodyWeight ? String(client.bodyWeight) : '');
-    setEditFat(client.bodyFat ? String(client.bodyFat) : '');
-    setEditNote(client.note || '');
-    setEditModal(true);
-  }
-
-  async function saveClientEdit() {
-    if (!editFirst.trim()) return;
-    const fullName = editLast.trim()
-      ? `${editFirst.trim()} ${editLast.trim()}`
-      : editFirst.trim();
-    const newWeight = editWeight.trim() ? parseFloat(editWeight.trim()) : null;
-    const newFat = editFat.trim() ? parseFloat(editFat.trim()) : null;
-    if (newWeight !== null && isNaN(newWeight)) {
-      Alert.alert('Error', 'Body weight must be a number.');
-      return;
-    }
-    if (newFat !== null && isNaN(newFat)) {
-      Alert.alert('Error', 'Body fat must be a number.');
-      return;
-    }
-    const weightChanged = newWeight !== (client.bodyWeight || null);
-    const fatChanged = newFat !== (client.bodyFat || null);
-
-    const updated = {
-      firstName: editFirst.trim(),
-      lastName: editLast.trim() || null,
-      name: fullName,
-      phone: editPhone.trim(),
-      email: editEmail.trim() || null,
-      age: editAge.trim() ? parseInt(editAge.trim()) : null,
-      bodyWeight: newWeight,
-      bodyFat: newFat,
-      note: editNote.trim() || null,
-    };
-
-    if (weightChanged) {
-      updated.weightUpdatedAt = new Date().toISOString();
-    }
-    if (fatChanged) {
-      updated.fatUpdatedAt = new Date().toISOString();
-    }
-    if (weightChanged || fatChanged) {
-      const today = new Date().toISOString().split('T')[0];
-      const history = [...(client.bodyHistory || [])];
-      const todayIdx = history.findIndex(e => e.date.split('T')[0] === today);
-      const entry = todayIdx >= 0 ? { ...history[todayIdx] } : { date: new Date().toISOString() };
-      if (weightChanged && newWeight !== null) entry.bodyWeight = newWeight;
-      if (fatChanged && newFat !== null) entry.bodyFat = newFat;
-      if (todayIdx >= 0) {
-        history[todayIdx] = entry;
-      } else {
-        history.push(entry);
-      }
-      updated.bodyHistory = history;
-    }
-    await writePatch(updated);
-    setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
-    navigation.setOptions({ title: updated.name });
-    setEditModal(false);
-  }
+  const recentSessions = sessions.slice(0, 3);
 
   function confirmAndNotify(method) {
     const currentRemaining = getSessionsRemaining(client, sessions.length);
@@ -384,112 +229,6 @@ export default function ClientDetailScreen({ route, navigation }) {
     }
   }
 
-  function openPurchaseModal() {
-    setEditingPurchaseIndex(null);
-    setPurchaseDate(new Date());
-    setPurchaseSessions('');
-    setPurchasePrice('');
-    setPurchaseModal(true);
-  }
-
-  function openEditPurchaseModal(index) {
-    const p = client?.purchases?.[index];
-    if (!p) return;
-    setEditingPurchaseIndex(index);
-    const d = new Date(p.date);
-    setPurchaseDate(isNaN(d.getTime()) ? new Date() : d);
-    setPurchaseSessions(p.sessions != null ? String(p.sessions) : '');
-    setPurchasePrice(p.pricePerSession != null ? String(p.pricePerSession) : '');
-    setHistoryModal(false);
-    setPurchaseModal(true);
-  }
-
-  async function savePurchase() {
-    const sessionsCount = parseInt(purchaseSessions.trim(), 10);
-    if (isNaN(sessionsCount) || sessionsCount <= 0) {
-      Alert.alert('Error', 'Enter a valid number of sessions.');
-      return;
-    }
-    const price = parseFloat(purchasePrice.trim());
-    if (isNaN(price) || price < 0) {
-      Alert.alert('Error', 'Enter a valid price per session.');
-      return;
-    }
-    setPurchaseSaving(true);
-    try {
-      const currentRemaining = getSessionsRemaining(client, sessions.length) || 0;
-      let newPurchases, newRemaining;
-      if (editingPurchaseIndex === null) {
-        const entry = {
-          date: purchaseDate.toISOString(),
-          sessions: sessionsCount,
-          pricePerSession: price,
-          createdAt: new Date().toISOString(),
-        };
-        newPurchases = [...(client.purchases || []), entry];
-        newRemaining = currentRemaining + sessionsCount;
-      } else {
-        const old = client.purchases[editingPurchaseIndex];
-        const entry = {
-          date: purchaseDate.toISOString(),
-          sessions: sessionsCount,
-          pricePerSession: price,
-          createdAt: old?.createdAt || new Date().toISOString(),
-        };
-        newPurchases = client.purchases.map((p, i) => i === editingPurchaseIndex ? entry : p);
-        newRemaining = currentRemaining + (sessionsCount - (old?.sessions || 0));
-      }
-      await writePatch({
-        purchases: newPurchases,
-        sessionsRemaining: newRemaining,
-        sessionsRemainingUpdatedAt: new Date().toISOString(),
-      });
-      setClient(prev => ({ ...prev, _fromUser: false, purchases: newPurchases, sessionsRemaining: newRemaining }));
-      setPurchaseModal(false);
-      setEditingPurchaseIndex(null);
-    } catch (e) {
-      Alert.alert('Error', e.message);
-    } finally {
-      setPurchaseSaving(false);
-    }
-  }
-
-  function confirmDeletePurchase(index) {
-    const p = client?.purchases?.[index];
-    if (!p) return;
-    const d = new Date(p.date);
-    const dateStr = isNaN(d.getTime())
-      ? ''
-      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const summary = `${dateStr ? dateStr + ' · ' : ''}${p.sessions} session${p.sessions !== 1 ? 's' : ''} @ $${p.pricePerSession}`;
-    Alert.alert(
-      'Delete Purchase?',
-      summary,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deletePurchase(index) },
-      ]
-    );
-  }
-
-  async function deletePurchase(index) {
-    const old = client?.purchases?.[index];
-    if (!old) return;
-    try {
-      const newPurchases = client.purchases.filter((_, i) => i !== index);
-      const currentRemaining = getSessionsRemaining(client, sessions.length) || 0;
-      const newRemaining = currentRemaining - (old.sessions || 0);
-      await writePatch({
-        purchases: newPurchases,
-        sessionsRemaining: newRemaining,
-        sessionsRemainingUpdatedAt: new Date().toISOString(),
-      });
-      setClient(prev => ({ ...prev, purchases: newPurchases, sessionsRemaining: newRemaining }));
-    } catch (e) {
-      Alert.alert('Error', e.message);
-    }
-  }
-
   function openAssignModal() {
     if (!isAppUser) return;
     setAssignTitle('');
@@ -585,7 +324,7 @@ export default function ClientDetailScreen({ route, navigation }) {
   return (
     <View style={styles.container}>
       <FlatList
-        data={sessions}
+        data={recentSessions}
         keyExtractor={item => item.id}
         ListHeaderComponent={
           <View>
@@ -600,45 +339,7 @@ export default function ClientDetailScreen({ route, navigation }) {
                     {name}{client?.age ? `, ${client.age}` : ''}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={openEditModal} style={styles.editBtn}>
-                  <Text style={styles.editBtnText}>Edit</Text>
-                </TouchableOpacity>
               </View>
-              {(() => {
-                const wDate = getLastBodyEditDate(client, 'weight');
-                const fDate = getLastBodyEditDate(client, 'fat');
-                const showW = client?.bodyWeight != null || wDate;
-                const showF = client?.bodyFat != null || fDate;
-                if (!showW && !showF) return null;
-                return (
-                  <View style={styles.bodyStatsRow}>
-                    {showW && (
-                      <View style={styles.bodyStat}>
-                        <Text style={styles.bodyStatLabel}>Body Weight</Text>
-                        <Text style={styles.bodyStatValue}>
-                          {client?.bodyWeight != null ? `${client.bodyWeight} lbs` : '—'}
-                        </Text>
-                        {wDate && <Text style={styles.bodyStatSub}>{formatLastEdited(wDate)}</Text>}
-                      </View>
-                    )}
-                    {showF && (
-                      <View style={styles.bodyStat}>
-                        <Text style={styles.bodyStatLabel}>Body Fat</Text>
-                        <Text style={styles.bodyStatValue}>
-                          {client?.bodyFat != null ? `${client.bodyFat}%` : '—'}
-                        </Text>
-                        {fDate && <Text style={styles.bodyStatSub}>{formatLastEdited(fDate)}</Text>}
-                      </View>
-                    )}
-                  </View>
-                );
-              })()}
-              {client?.note ? (
-                <View style={styles.noteBox}>
-                  <Text style={styles.noteLabel}>Notes</Text>
-                  <Text style={styles.noteText}>{client.note}</Text>
-                </View>
-              ) : null}
               {(() => {
                 const used = sessions.length + (client?.manualDeductions || 0);
                 const remaining = getSessionsRemaining(client, sessions.length);
@@ -669,18 +370,17 @@ export default function ClientDetailScreen({ route, navigation }) {
                         <Text style={styles.sessionsStatLabel}>Used</Text>
                       </View>
                     </View>
-                    <View style={styles.purchaseBtnRow}>
-                      <TouchableOpacity style={styles.logPurchaseBtn} onPress={openPurchaseModal}>
-                        <Ionicons name="add-circle-outline" size={16} color={COLORS.accent} />
-                        <Text style={styles.logPurchaseBtnText}>Log Purchase</Text>
-                      </TouchableOpacity>
-                      {client?.purchases?.length > 0 ? (
-                        <TouchableOpacity style={styles.viewHistoryBtn} onPress={() => setHistoryModal(true)}>
+                    {client?.purchases?.length > 0 ? (
+                      <View style={styles.purchaseBtnRow}>
+                        <TouchableOpacity
+                          style={styles.viewHistoryBtn}
+                          onPress={() => navigation.navigate('PurchaseHistory', { clientId, name, loggedCount: sessions.length })}
+                        >
                           <Ionicons name="time-outline" size={16} color={COLORS.text} />
                           <Text style={styles.viewHistoryBtnText}>View Purchases</Text>
                         </TouchableOpacity>
-                      ) : null}
-                    </View>
+                      </View>
+                    ) : null}
                     {hasRemaining && (client?.phone || client?.email) ? (
                       <View style={styles.notifyRow}>
                         {client?.phone ? (
@@ -702,23 +402,6 @@ export default function ClientDetailScreen({ route, navigation }) {
               })()}
             </View>
 
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => {
-                  if (isInactive) { showNoAccess(); return; }
-                  navigation.navigate('NewSession', { clientId, name });
-                }}
-              >
-                <Text style={styles.primaryBtnText}>+ New Session</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={() => navigation.navigate('Progress', { clientId, name })}
-              >
-                <Text style={styles.secondaryBtnText}>View Progress</Text>
-              </TouchableOpacity>
-            </View>
             <TouchableOpacity
               style={[styles.assignBtn, !isAppUser && styles.assignBtnDisabled]}
               onPress={openAssignModal}
@@ -730,108 +413,9 @@ export default function ClientDetailScreen({ route, navigation }) {
             {!isAppUser && (
               <Text style={styles.assignHint}>This client needs an app account to receive assigned workouts.</Text>
             )}
-            <Text style={styles.sectionLabel}>Session History</Text>
-
-            {/* Date Range Search */}
-            <View style={styles.dateSearchRow}>
-              <TouchableOpacity style={styles.dateInput} onPress={() => setShowFromPicker(true)}>
-                <Text style={fromDate ? styles.dateInputText : styles.dateInputPlaceholder}>
-                  {formatPickedDate(fromDate)}
-                </Text>
-              </TouchableOpacity>
-              <Text style={styles.dateToText}>to</Text>
-              <TouchableOpacity style={styles.dateInput} onPress={() => setShowToPicker(true)}>
-                <Text style={toDate ? styles.dateInputText : styles.dateInputPlaceholder}>
-                  {formatPickedDate(toDate)}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.dateSearchActions}>
-              <TouchableOpacity style={styles.searchBtn} onPress={applyDateFilter}>
-                <Text style={styles.searchBtnText}>Search</Text>
-              </TouchableOpacity>
-              {filtering && (
-                <TouchableOpacity style={styles.clearBtn} onPress={clearFilter}>
-                  <Text style={styles.clearBtnText}>Clear</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            {filtering && (
-              <Text style={styles.filterInfo}>
-                Showing {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''} from {formatPickedDate(fromDate)} to {formatPickedDate(toDate)}
-              </Text>
-            )}
-            {showFromPicker && (
-              Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade">
-                  <Pressable style={styles.pickerOverlay} onPress={() => setShowFromPicker(false)}>
-                    <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
-                      <DateTimePicker
-                        maximumDate={new Date()}
-                        value={fromDate || new Date()}
-                        mode="date"
-                        display="inline"
-                        onChange={(event, date) => {
-                          if (date) setFromDate(date);
-                        }}
-                        themeVariant="dark"
-                      />
-                      <TouchableOpacity style={styles.pickerDone} onPress={() => setShowFromPicker(false)}>
-                        <Text style={styles.pickerDoneText}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </Pressable>
-                </Modal>
-              ) : (
-                <DateTimePicker
-                        maximumDate={new Date()}
-                  value={fromDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowFromPicker(false);
-                    if (date) setFromDate(date);
-                  }}
-                />
-              )
-            )}
-            {showToPicker && (
-              Platform.OS === 'ios' ? (
-                <Modal transparent animationType="fade">
-                  <Pressable style={styles.pickerOverlay} onPress={() => setShowToPicker(false)}>
-                    <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
-                      <DateTimePicker
-                        maximumDate={new Date()}
-                        value={toDate || new Date()}
-                        mode="date"
-                        display="inline"
-                        onChange={(event, date) => {
-                          if (date) setToDate(date);
-                        }}
-                        themeVariant="dark"
-                      />
-                      <TouchableOpacity style={styles.pickerDone} onPress={() => setShowToPicker(false)}>
-                        <Text style={styles.pickerDoneText}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </Pressable>
-                </Modal>
-              ) : (
-                <DateTimePicker
-                        maximumDate={new Date()}
-                  value={toDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowToPicker(false);
-                    if (date) setToDate(date);
-                  }}
-                />
-              )
-            )}
+            <Text style={styles.sectionLabel}>Recent Sessions</Text>
           </View>
         }
-        data={pagedSessions}
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.card}
@@ -845,156 +429,58 @@ export default function ClientDetailScreen({ route, navigation }) {
                 {totalSets(item)} set{totalSets(item) !== 1 ? 's' : ''}
               </Text>
             </View>
-            <TouchableOpacity
-              style={styles.deleteBtn}
-              onPress={() => confirmDelete(item)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={styles.deleteBtnText}>✕</Text>
-            </TouchableOpacity>
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
           </TouchableOpacity>
         )}
         ListFooterComponent={
-          filteredSessions.length > 0 ? (
-            <View style={styles.pagination}>
-              <TouchableOpacity
-                style={[styles.pageBtn, page === 0 && styles.pageBtnDisabled]}
-                onPress={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-              >
-                <Text style={[styles.pageBtnText, page === 0 && styles.pageBtnTextDisabled]}>‹ Prev</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.currentBtn} onPress={goToCurrentDate}>
-                <Text style={styles.currentBtnText}>Latest</Text>
-              </TouchableOpacity>
-              <Text style={styles.pageInfo}>{page + 1} / {totalPages}</Text>
-              <TouchableOpacity
-                style={[styles.pageBtn, page >= totalPages - 1 && styles.pageBtnDisabled]}
-                onPress={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-              >
-                <Text style={[styles.pageBtnText, page >= totalPages - 1 && styles.pageBtnTextDisabled]}>Next ›</Text>
-              </TouchableOpacity>
-            </View>
+          sessions.length > 3 ? (
+            <TouchableOpacity
+              style={styles.seeAllBtn}
+              onPress={() => navigation.navigate('SessionHistory', { clientId, name })}
+            >
+              <Text style={styles.seeAllText}>See all {sessions.length} sessions</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.accent} />
+            </TouchableOpacity>
           ) : null
         }
         ListEmptyComponent={
-          <Text style={styles.empty}>{filtering ? 'No sessions found in this date range.' : 'No sessions logged yet.\nTap "+ New Session" to start.'}</Text>
+          <Text style={styles.empty}>{'No sessions logged yet.\nTap "+ New Session" to start.'}</Text>
         }
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: 96 + insets.bottom }]}
       />
-
-      {/* Edit Client Modal */}
-      <Modal visible={editModal} transparent animationType="slide">
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <View style={[styles.toolbar, { paddingBottom: insets.bottom || 12 }]}>
+        <TouchableOpacity
+          style={styles.toolbarItem}
+          onPress={() => {
+            if (isInactive) { showNoAccess(); return; }
+            navigation.navigate('NewSession', { clientId, name });
+          }}
         >
-          <Pressable style={styles.backdrop} onPress={() => setEditModal(false)} />
-          <View style={[styles.modal, { maxHeight: '85%' }]}>
-            <ScrollView keyboardShouldPersistTaps="handled">
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Client</Text>
-              <TouchableOpacity onPress={() => setEditModal(false)} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.fieldLabel}>Name</Text>
-            <View style={styles.nameRow}>
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder="First name *"
-                placeholderTextColor={COLORS.textMuted}
-                value={editFirst}
-                onChangeText={setEditFirst}
-              />
-              <TextInput
-                style={[styles.input, { flex: 1 }]}
-                placeholder="Last (optional)"
-                placeholderTextColor={COLORS.textMuted}
-                value={editLast}
-                onChangeText={setEditLast}
-              />
-            </View>
-            <Text style={styles.fieldLabel}>Phone</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Phone"
-              placeholderTextColor={COLORS.textMuted}
-              value={editPhone}
-              onChangeText={setEditPhone}
-              keyboardType="phone-pad"
-            />
-            <Text style={styles.fieldLabel}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={COLORS.textMuted}
-              value={editEmail}
-              onChangeText={setEditEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={styles.fieldLabel}>Age</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Age"
-              placeholderTextColor={COLORS.textMuted}
-              value={editAge}
-              onChangeText={setEditAge}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.fieldLabel}>Body Weight (lbs)</Text>
-            {formatLastEdited(getLastBodyEditDate(client, 'weight')) ? (
-              <Text style={styles.lastUpdated}>
-                {formatLastEdited(getLastBodyEditDate(client, 'weight'))}
-              </Text>
-            ) : null}
-            <TextInput
-              style={styles.input}
-              placeholder="Enter weight"
-              placeholderTextColor={COLORS.textMuted}
-              value={editWeight}
-              onChangeText={setEditWeight}
-              keyboardType="decimal-pad"
-            />
-            <Text style={styles.fieldLabel}>Body Fat %</Text>
-            {formatLastEdited(getLastBodyEditDate(client, 'fat')) ? (
-              <Text style={styles.lastUpdated}>
-                {formatLastEdited(getLastBodyEditDate(client, 'fat'))}
-              </Text>
-            ) : null}
-            <TextInput
-              style={styles.input}
-              placeholder="Enter body fat"
-              placeholderTextColor={COLORS.textMuted}
-              value={editFat}
-              onChangeText={setEditFat}
-              keyboardType="decimal-pad"
-            />
-            <Text style={styles.fieldLabel}>Notes</Text>
-            <TextInput
-              style={[styles.input, styles.noteInput]}
-              placeholder="Notes"
-              placeholderTextColor={COLORS.textMuted}
-              value={editNote}
-              onChangeText={setEditNote}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-            <TouchableOpacity style={styles.modalBtn} onPress={saveClientEdit}>
-              <Text style={styles.modalBtnText}>Save Changes</Text>
-            </TouchableOpacity>
-            </View>
-            </TouchableWithoutFeedback>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <Ionicons name="add-circle" size={24} color={COLORS.accent} />
+          <Text style={[styles.toolbarLabel, styles.toolbarLabelPrimary]} numberOfLines={1}>New Session</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.toolbarItem}
+          onPress={() => navigation.navigate('PurchaseHistory', { clientId, name, loggedCount: sessions.length })}
+        >
+          <Ionicons name="cash-outline" size={24} color={COLORS.text} />
+          <Text style={styles.toolbarLabel} numberOfLines={1}>Log Purchase</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.toolbarItem}
+          onPress={() => navigation.navigate('Progress', { clientId, name })}
+        >
+          <Ionicons name="stats-chart-outline" size={24} color={COLORS.text} />
+          <Text style={styles.toolbarLabel} numberOfLines={1}>Progress</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.toolbarItem}
+          onPress={() => navigation.navigate('ClientProfile', { clientId, name })}
+        >
+          <Ionicons name="person-outline" size={24} color={COLORS.text} />
+          <Text style={styles.toolbarLabel} numberOfLines={1}>Profile</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Edit Sessions Remaining Modal */}
       <Modal visible={sessionsModal} transparent animationType="fade" onRequestClose={() => setSessionsModal(false)}>
@@ -1030,153 +516,6 @@ export default function ClientDetailScreen({ route, navigation }) {
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Log Purchase Modal */}
-      <Modal visible={purchaseModal} transparent animationType="fade" onRequestClose={() => { setPurchaseModal(false); setEditingPurchaseIndex(null); }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <Pressable style={styles.centerBackdrop} onPress={() => { setPurchaseModal(false); setEditingPurchaseIndex(null); }}>
-            <Pressable style={styles.sessionsModalContent} onPress={() => {}}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{editingPurchaseIndex === null ? 'Log Purchase' : 'Edit Purchase'}</Text>
-                <TouchableOpacity onPress={() => { setPurchaseModal(false); setEditingPurchaseIndex(null); }} style={styles.closeBtn}>
-                  <Text style={styles.closeBtnText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.fieldLabel}>Date</Text>
-              <TouchableOpacity style={styles.input} onPress={() => setShowPurchaseDatePicker(true)}>
-                <Text style={{ color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular }}>
-                  {purchaseDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </Text>
-              </TouchableOpacity>
-              {showPurchaseDatePicker && (
-                Platform.OS === 'ios' ? (
-                  <Modal transparent animationType="fade">
-                    <Pressable style={styles.pickerOverlay} onPress={() => setShowPurchaseDatePicker(false)}>
-                      <View style={styles.pickerContainer} onStartShouldSetResponder={() => true}>
-                        <DateTimePicker
-                          maximumDate={new Date()}
-                          value={purchaseDate}
-                          mode="date"
-                          display="inline"
-                          onChange={(event, date) => {
-                            if (date) setPurchaseDate(date);
-                          }}
-                          themeVariant="dark"
-                        />
-                        <TouchableOpacity style={styles.pickerDone} onPress={() => setShowPurchaseDatePicker(false)}>
-                          <Text style={styles.pickerDoneText}>Done</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </Pressable>
-                  </Modal>
-                ) : (
-                  <DateTimePicker
-                    maximumDate={new Date()}
-                    value={purchaseDate}
-                    mode="date"
-                    display="default"
-                    onChange={(event, date) => {
-                      setShowPurchaseDatePicker(false);
-                      if (date) setPurchaseDate(date);
-                    }}
-                  />
-                )
-              )}
-              <Text style={styles.fieldLabel}>Number of Sessions</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 10"
-                placeholderTextColor={COLORS.textMuted}
-                value={purchaseSessions}
-                onChangeText={setPurchaseSessions}
-                keyboardType="number-pad"
-              />
-              <Text style={styles.fieldLabel}>Price per Session ($)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 80"
-                placeholderTextColor={COLORS.textMuted}
-                value={purchasePrice}
-                onChangeText={setPurchasePrice}
-                keyboardType="decimal-pad"
-              />
-              {(() => {
-                const s = parseInt(purchaseSessions, 10);
-                const p = parseFloat(purchasePrice);
-                if (!isNaN(s) && !isNaN(p) && s > 0 && p >= 0) {
-                  return (
-                    <Text style={styles.sessionsHint}>Total: ${(s * p).toFixed(2)}</Text>
-                  );
-                }
-                return null;
-              })()}
-              <TouchableOpacity
-                style={styles.modalBtn}
-                onPress={savePurchase}
-                disabled={purchaseSaving}
-              >
-                <Text style={styles.modalBtnText}>
-                  {purchaseSaving
-                    ? 'Saving...'
-                    : editingPurchaseIndex === null ? 'Save Purchase' : 'Save Changes'}
-                </Text>
-              </TouchableOpacity>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Purchase History Modal */}
-      <Modal visible={historyModal} transparent animationType="fade" onRequestClose={() => setHistoryModal(false)}>
-        <Pressable style={styles.centerBackdrop} onPress={() => setHistoryModal(false)}>
-          <Pressable style={styles.historyModalContent} onPress={() => {}}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Purchase History</Text>
-              <TouchableOpacity onPress={() => setHistoryModal(false)} style={styles.closeBtn}>
-                <Text style={styles.closeBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView keyboardShouldPersistTaps="handled">
-              {(client?.purchases || [])
-                .map((p, i) => ({ ...p, _originalIndex: i }))
-                .sort((a, b) => new Date(b.date) - new Date(a.date))
-                .map((p) => {
-                  const d = new Date(p.date);
-                  const dateStr = isNaN(d.getTime())
-                    ? '—'
-                    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                  const total = (p.sessions || 0) * (p.pricePerSession || 0);
-                  return (
-                    <View key={p._originalIndex} style={styles.historyRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.purchaseDate}>{dateStr}</Text>
-                        <Text style={styles.purchaseMeta}>
-                          {p.sessions} session{p.sessions !== 1 ? 's' : ''} @ ${p.pricePerSession} = ${total}
-                        </Text>
-                      </View>
-                      <View style={styles.purchaseRowActions}>
-                        <TouchableOpacity
-                          style={styles.purchaseActionBtn}
-                          onPress={() => openEditPurchaseModal(p._originalIndex)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="pencil-outline" size={18} color={COLORS.accent} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.purchaseActionBtn}
-                          onPress={() => confirmDeletePurchase(p._originalIndex)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
       </Modal>
 
       {/* Assign Workout Modal */}
@@ -1851,5 +1190,45 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
     fontSize: 14,
     fontFamily: FONTS.semiBold,
+  },
+
+  // Recent sessions footer
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 14,
+    marginTop: 2,
+  },
+  seeAllText: {
+    color: COLORS.accent,
+    fontSize: 14,
+    fontFamily: FONTS.semiBold,
+  },
+
+  // Pinned bottom action toolbar
+  toolbar: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderColor: COLORS.border,
+    paddingTop: 10,
+  },
+  toolbarItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  toolbarLabel: {
+    color: COLORS.text,
+    fontSize: 11,
+    fontFamily: FONTS.semiBold,
+  },
+  toolbarLabelPrimary: {
+    color: COLORS.accent,
   },
 });

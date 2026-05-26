@@ -16,6 +16,9 @@ import ProgressScreen from '../screens/ProgressScreen';
 import AdminScreen from '../screens/AdminScreen';
 import ActivityCalendarScreen from '../screens/ActivityCalendarScreen';
 import SavedWorkoutsScreen from '../screens/SavedWorkoutsScreen';
+import SessionHistoryScreen from '../screens/SessionHistoryScreen';
+import ClientProfileScreen from '../screens/ClientProfileScreen';
+import PurchaseHistoryScreen from '../screens/PurchaseHistoryScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -76,6 +79,21 @@ export default function AppNavigator() {
               name="Progress"
               component={ProgressScreen}
               options={({ route }) => ({ title: `${route.params?.name || 'Client'} Progress` })}
+            />
+            <Stack.Screen
+              name="SessionHistory"
+              component={SessionHistoryScreen}
+              options={{ title: 'Session History' }}
+            />
+            <Stack.Screen
+              name="ClientProfile"
+              component={ClientProfileScreen}
+              options={{ title: 'Profile' }}
+            />
+            <Stack.Screen
+              name="PurchaseHistory"
+              component={PurchaseHistoryScreen}
+              options={{ title: 'Purchases' }}
             />
             <Stack.Screen
               name="Admin"
