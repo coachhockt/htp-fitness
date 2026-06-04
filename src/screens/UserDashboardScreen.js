@@ -1,19 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert, Image,
-  Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, ScrollView,
+  Modal, Pressable, TextInput, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback, ScrollView, AppState,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import {
   collection, query, where, onSnapshot, doc, setDoc,
 } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited } from '../utils';
 import { showNoAccess, handledNoAccess } from '../access';
+import { isStepsAvailable, requestStepAccess, getTodaySteps, getWeeklySteps } from '../health';
 import ProfileMenu from '../components/ProfileMenu';
+import { SAMPLE_WORKOUTS } from '../sampleWorkouts';
 
 export default function UserDashboardScreen({ navigation }) {
   const { user, isInactive, logout, saveProfile, changePassword } = useAuth();
@@ -33,6 +36,14 @@ export default function UserDashboardScreen({ navigation }) {
   const [editSex, setEditSex] = useState('');
   const [editWeight, setEditWeight] = useState('');
   const [editFat, setEditFat] = useState('');
+  const [goalModal, setGoalModal] = useState(false);
+  const [startPicker, setStartPicker] = useState(false);
+  const [goalInput, setGoalInput] = useState('');
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [stepsAvailable, setStepsAvailable] = useState(false);
+  const [stepsAuthorized, setStepsAuthorized] = useState(false);
+  const [stepsToday, setStepsToday] = useState(0);
+  const [weeklySteps, setWeeklySteps] = useState(0);
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -50,6 +61,41 @@ export default function UserDashboardScreen({ navigation }) {
       if (snap.exists()) setSchedule(snap.data());
     });
   }, [user.uid]);
+
+  // Step tracking (Apple Health / Health Connect) — display only, never written back.
+  const stepsAuthedRef = useRef(false);
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSteps = async () => {
+      const [today, week] = await Promise.all([getTodaySteps(), getWeeklySteps()]);
+      if (!mounted) return;
+      setStepsToday(today);
+      setWeeklySteps(week);
+    };
+
+    (async () => {
+      const available = await isStepsAvailable();
+      if (!mounted) return;
+      setStepsAvailable(available);
+      if (!available) return;
+      // If the user connected before, silently re-authorize (no prompt when already granted) and refresh.
+      const connected = await AsyncStorage.getItem('stepsConnected');
+      if (connected === '1') {
+        const ok = await requestStepAccess();
+        if (!mounted) return;
+        setStepsAuthorized(ok);
+        stepsAuthedRef.current = ok;
+        if (ok) loadSteps();
+      }
+    })();
+
+    // Refresh step counts whenever the app returns to the foreground.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && stepsAuthedRef.current) loadSteps();
+    });
+    return () => { mounted = false; sub.remove(); };
+  }, []);
 
   const upcomingWorkouts = (() => {
     if (!schedule) return [];
@@ -135,17 +181,57 @@ export default function UserDashboardScreen({ navigation }) {
     }
   }
 
+  function toDate(ts) {
+    return ts?.toDate ? ts.toDate() : new Date(ts);
+  }
+
+  function formatDate(ts) {
+    const d = toDate(ts);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function totalSets(session) {
+    return session.exercises?.reduce((n, ex) => n + (ex.sets?.length || 0), 0) || 0;
+  }
+
+  // Monday-start date for any given date, normalized to midnight.
+  function startOfWeekFor(date) {
+    const day = date.getDay(); // 0=Sun
+    const d = new Date(date);
+    d.setDate(date.getDate() - (day === 0 ? 6 : day - 1)); // Monday
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
   const sessionsThisWeek = (() => {
-    const now = new Date();
-    const day = now.getDay(); // 0=Sun
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - (day === 0 ? 6 : day - 1)); // Monday
-    startOfWeek.setHours(0, 0, 0, 0);
+    const startOfWeek = startOfWeekFor(new Date());
     return sessions.filter(s => {
       if (!s.date) return false;
-      const d = s.date.toDate ? s.date.toDate() : new Date(s.date);
-      return d >= startOfWeek;
+      return toDate(s.date) >= startOfWeek;
     }).length;
+  })();
+
+  const recentSessions = [...sessions]
+    .filter(s => s.date)
+    .sort((a, b) => toDate(b.date) - toDate(a.date))
+    .slice(0, 3);
+
+  // Consecutive Mon–Sun weeks with ≥1 session. Strict: if the current week
+  // has no session, the streak is 0.
+  const weekStreak = (() => {
+    if (sessions.length === 0) return 0;
+    const weeks = new Set(
+      sessions
+        .filter(s => s.date)
+        .map(s => startOfWeekFor(toDate(s.date)).getTime())
+    );
+    const cursor = startOfWeekFor(new Date());
+    let count = 0;
+    while (weeks.has(cursor.getTime())) {
+      count++;
+      cursor.setDate(cursor.getDate() - 7);
+    }
+    return count;
   })();
 
   function openProfileView() {
@@ -170,6 +256,56 @@ export default function UserDashboardScreen({ navigation }) {
     setNewPw('');
     setConfirmPw('');
     setSettingsModal(true);
+  }
+
+  function openGoalModal() {
+    if (isInactive) { showNoAccess(); return; }
+    const current = user.profile?.goals?.weeklySessions;
+    setGoalInput(current ? String(current) : '');
+    setGoalModal(true);
+  }
+
+  async function persistGoal(weeklySessions) {
+    const p = user.profile || {};
+    setGoalSaving(true);
+    try {
+      await saveProfile({ ...p, goals: { ...(p.goals || {}), weeklySessions } });
+      setGoalModal(false);
+    } catch (e) {
+      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
+    } finally {
+      setGoalSaving(false);
+    }
+  }
+
+  function handleSaveGoal() {
+    const n = parseInt(goalInput.trim(), 10);
+    if (isNaN(n) || n < 1 || n > 14) {
+      Alert.alert('Error', 'Enter a number of sessions per week between 1 and 14.');
+      return;
+    }
+    persistGoal(n);
+  }
+
+  function handleClearGoal() {
+    persistGoal(null);
+  }
+
+  async function connectSteps() {
+    const ok = await requestStepAccess();
+    setStepsAuthorized(ok);
+    stepsAuthedRef.current = ok;
+    if (ok) {
+      await AsyncStorage.setItem('stepsConnected', '1');
+      const [today, week] = await Promise.all([getTodaySteps(), getWeeklySteps()]);
+      setStepsToday(today);
+      setWeeklySteps(week);
+    } else {
+      Alert.alert(
+        'Step Tracking',
+        'Could not connect to your health data. You can enable step access later in your device’s Health settings.'
+      );
+    }
   }
 
   async function handleChangePassword() {
@@ -248,10 +384,16 @@ export default function UserDashboardScreen({ navigation }) {
   }
 
   const profile = user.profile || {};
+  const weeklyGoal = profile.goals?.weeklySessions || null;
+  const goalProgress = weeklyGoal ? Math.min(1, sessionsThisWeek / weeklyGoal) : 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={{ flex: 1, padding: 20 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.logoContainer}>
           <Image
             source={require('../../assets/logo.png')}
@@ -276,9 +418,97 @@ export default function UserDashboardScreen({ navigation }) {
           />
         </View>
 
-        <View style={styles.weekCard}>
-          <Text style={styles.weekCount}>{sessionsThisWeek}</Text>
-          <Text style={styles.weekLabel}>Sessions trained this week</Text>
+        <View style={styles.statRow}>
+          <View style={styles.statCard}>
+            <View style={styles.streakHeader}>
+              <Ionicons name="flame" size={18} color={weekStreak > 0 ? COLORS.accent : COLORS.textMuted} />
+              <Text style={styles.statCount}>{weekStreak}</Text>
+            </View>
+            <Text style={styles.statLabel}>Week streak</Text>
+          </View>
+
+          <TouchableOpacity style={styles.statCard} onPress={openGoalModal} activeOpacity={0.7}>
+            {weeklyGoal ? (
+              <>
+                <Text style={styles.statCount}>
+                  {sessionsThisWeek}<Text style={styles.statGoalTotal}>/{weeklyGoal}</Text>
+                </Text>
+                <Text style={styles.statLabel}>Sessions this week</Text>
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${goalProgress * 100}%` }]} />
+                </View>
+              </>
+            ) : (
+              <>
+                <Ionicons name="add-circle-outline" size={22} color={COLORS.accent} />
+                <Text style={styles.statLabel}>Set a weekly goal</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {stepsAvailable && (
+          stepsAuthorized ? (
+            <View style={styles.stepsCard}>
+              <View style={styles.stepsIconWrap}>
+                <Ionicons name="footsteps" size={22} color={COLORS.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepsCount}>{stepsToday.toLocaleString()}</Text>
+                <Text style={styles.stepsLabel}>Steps today</Text>
+              </View>
+              <View style={styles.stepsWeek}>
+                <Text style={styles.stepsWeekCount}>{weeklySteps.toLocaleString()}</Text>
+                <Text style={styles.stepsWeekLabel}>this week</Text>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.stepsConnect} onPress={connectSteps} activeOpacity={0.7}>
+              <Ionicons name="footsteps" size={20} color={COLORS.accent} />
+              <Text style={styles.stepsConnectText}>
+                Connect {Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'} to track steps
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          )
+        )}
+
+        <View style={{ marginBottom: 20 }}>
+          <Text style={styles.upcomingTitle}>Recent Sessions</Text>
+          {recentSessions.length > 0 ? (
+            <>
+              {recentSessions.map((s) => (
+                <TouchableOpacity
+                  key={s.id}
+                  style={styles.upcomingCard}
+                  onPress={() => navigation.navigate('SessionDetail', { sessionId: s.id })}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.upcomingDay}>{formatDate(s.date)}</Text>
+                    <Text style={styles.upcomingLabel}>
+                      {s.exercises?.length || 0} exercise{s.exercises?.length !== 1 ? 's' : ''}
+                      {'  ·  '}
+                      {totalSets(s)} set{totalSets(s) !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              ))}
+              {sessions.length > 3 && (
+                <TouchableOpacity
+                  style={styles.seeAllBtn}
+                  onPress={() => navigation.navigate('ActivityCalendar')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.seeAllText}>See all sessions</Text>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.accent} />
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <Text style={styles.upcomingEmpty}>No sessions logged yet</Text>
+          )}
         </View>
 
         <View>
@@ -312,17 +542,78 @@ export default function UserDashboardScreen({ navigation }) {
             <Text style={styles.upcomingEmpty}>No upcoming workouts scheduled</Text>
           )}
         </View>
-      </View>
+      </ScrollView>
 
       <TouchableOpacity
         style={styles.fab}
         onPress={() => {
           if (isInactive) { showNoAccess(); return; }
-          navigation.navigate('NewSession', { clientId: user.uid, name: profile.fullName || 'My Session' });
+          setStartPicker(true);
         }}
       >
         <Text style={styles.fabText}>Start Training</Text>
       </TouchableOpacity>
+
+      <Modal visible={startPicker} transparent animationType="fade" onRequestClose={() => setStartPicker(false)}>
+        <Pressable style={styles.centerBackdrop} onPress={() => setStartPicker(false)}>
+          <View style={styles.centerModal} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Start a Workout</Text>
+              <TouchableOpacity onPress={() => setStartPicker(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.pickerRow}
+              onPress={() => {
+                setStartPicker(false);
+                navigation.navigate('NewSession', { clientId: user.uid, name: profile.fullName || 'My Session' });
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={COLORS.accent} />
+              <Text style={styles.pickerRowText}>Blank Session</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+
+            <Text style={styles.pickerSectionLabel}>Samples</Text>
+            {SAMPLE_WORKOUTS.map((s) => (
+              <TouchableOpacity
+                key={s.id}
+                style={styles.pickerRow}
+                onPress={() => {
+                  setStartPicker(false);
+                  navigation.navigate('NewSession', {
+                    clientId: user.uid,
+                    name: s.title,
+                    initialExercises: s.exercises,
+                  });
+                }}
+              >
+                <Ionicons name="barbell-outline" size={20} color={COLORS.accent} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pickerRowText}>{s.title}</Text>
+                  {s.description ? <Text style={styles.pickerRowSub}>{s.description}</Text> : null}
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            ))}
+
+            <Text style={styles.pickerSectionLabel}>From your library</Text>
+            <TouchableOpacity
+              style={styles.pickerRow}
+              onPress={() => {
+                setStartPicker(false);
+                navigation.navigate('SavedWorkouts');
+              }}
+            >
+              <Ionicons name="bookmark-outline" size={20} color={COLORS.accent} />
+              <Text style={styles.pickerRowText}>Saved & Trainer Workouts</Text>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       <Modal visible={profileModal} transparent animationType="fade">
         <Pressable style={styles.centerBackdrop} onPress={() => setProfileModal(false)}>
@@ -539,6 +830,45 @@ export default function UserDashboardScreen({ navigation }) {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal visible={goalModal} transparent animationType="fade">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.centerBackdrop} onPress={() => setGoalModal(false)}>
+            <View style={styles.centerModal} onStartShouldSetResponder={() => true}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Weekly Goal</Text>
+                <TouchableOpacity onPress={() => setGoalModal(false)} style={styles.closeBtn}>
+                  <Text style={styles.closeBtnText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.fieldLabel}>Sessions per week</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 4"
+                placeholderTextColor={COLORS.textMuted}
+                value={goalInput}
+                onChangeText={setGoalInput}
+                keyboardType="number-pad"
+              />
+              <TouchableOpacity
+                style={[styles.modalBtn, goalSaving && { opacity: 0.5 }]}
+                onPress={handleSaveGoal}
+                disabled={goalSaving}
+              >
+                <Text style={styles.modalBtnText}>{goalSaving ? 'Saving...' : 'Save Goal'}</Text>
+              </TouchableOpacity>
+              {profile.goals?.weeklySessions ? (
+                <TouchableOpacity style={styles.settingsBack} onPress={handleClearGoal} disabled={goalSaving}>
+                  <Text style={styles.settingsBackText}>Clear Goal</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -566,26 +896,133 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bold,
     color: COLORS.text,
   },
-  weekCard: {
+  statRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
     backgroundColor: COLORS.card,
     borderRadius: 14,
-    padding: 20,
-    marginBottom: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 104,
   },
-  weekCount: {
+  streakHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statCount: {
     color: COLORS.accent,
     fontSize: 36,
     fontWeight: '800',
     fontFamily: FONTS.extraBold,
   },
-  weekLabel: {
+  statGoalTotal: {
+    color: COLORS.textMuted,
+    fontSize: 22,
+    fontFamily: FONTS.bold,
+  },
+  statLabel: {
     color: COLORS.textMuted,
     fontSize: 13,
     fontFamily: FONTS.semiBold,
     marginTop: 4,
+    textAlign: 'center',
+  },
+  progressTrack: {
+    width: '100%',
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.border,
+    marginTop: 10,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.accent,
+  },
+
+  // Steps
+  stepsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  stepsIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.accent + '1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  stepsCount: {
+    color: COLORS.accent,
+    fontSize: 26,
+    fontWeight: '800',
+    fontFamily: FONTS.extraBold,
+  },
+  stepsLabel: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.semiBold,
+    marginTop: 2,
+  },
+  stepsWeek: {
+    alignItems: 'flex-end',
+  },
+  stepsWeekCount: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontFamily: FONTS.bold,
+  },
+  stepsWeekLabel: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontFamily: FONTS.regular,
+    marginTop: 2,
+  },
+  stepsConnect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  stepsConnectText: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    fontFamily: FONTS.semiBold,
+  },
+  seeAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 4,
+  },
+  seeAllText: {
+    color: COLORS.accent,
+    fontSize: 13,
+    fontFamily: FONTS.semiBold,
   },
   fab: {
     position: 'absolute',
@@ -598,6 +1035,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fabText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  pickerRowText: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 15,
+    fontFamily: FONTS.semiBold,
+  },
+  pickerRowSub: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    marginTop: 2,
+  },
+  pickerSectionLabel: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    fontFamily: FONTS.bold,
+    marginTop: 14,
+    marginBottom: 2,
+  },
 
   // Upcoming
   upcomingTitle: {

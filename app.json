@@ -29,7 +29,10 @@
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D"
       },
-      "package": "com.htp.fitness"
+      "package": "com.htp.fitness",
+      "permissions": [
+        "android.permission.health.READ_STEPS"
+      ]
     },
     "plugins": [
       "expo-asset",
@@ -37,7 +40,22 @@
       "expo-web-browser",
       "@react-native-community/datetimepicker",
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "HTP Fitness reads your step count to show your activity."
+        }
+      ],
+      "expo-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {
