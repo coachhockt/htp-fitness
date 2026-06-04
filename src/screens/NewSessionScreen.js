@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, KeyboardAvoidingView, Platform, BackHandler,
-  Modal, Pressable,
+  Modal, Pressable, Vibration,
 } from 'react-native';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
-import { compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
+import { compute1RMs, estimate1RM, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, handledNoAccess } from '../access';
@@ -17,6 +17,14 @@ const SET_COLORS = {
   dropset: '#D4872A',
   superset: '#4A90D9',
 };
+
+function formatDuration(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
 
 function SetBadge({ type, index, isAboveDropset }) {
   if (type === 'dropset') {
@@ -36,7 +44,7 @@ function SetBadge({ type, index, isAboveDropset }) {
   return <Text style={[styles.setNum, isAboveDropset && { color: SET_COLORS.dropset }]}>{index + 1}</Text>;
 }
 
-function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset, unit }) {
+function SetRow({ set, index, onUpdate, onToggleBW, onDelete, onTagPress, isAboveDropset, unit }) {
   const rowBg = set.type === 'dropset' ? SET_COLORS.dropset + '10'
     : set.type === 'superset' ? SET_COLORS.superset + '10'
     : 'transparent';
@@ -53,26 +61,39 @@ function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset, un
         )}
         <SetBadge type={set.type} index={index} isAboveDropset={isAboveDropset} />
       </TouchableOpacity>
-      <TextInput
-        style={styles.setInput}
-        placeholder="B.W."
-        placeholderTextColor={COLORS.textMuted}
-        value={set.weight}
-        onChangeText={v => {
-          const num = parseFloat(v);
-          if (v !== '' && !isNaN(num) && num < 0) {
-            Alert.alert('Invalid', 'Weight cannot be negative.');
-            return;
-          }
-          if (v !== '' && !isNaN(num) && num > 1500) {
-            Alert.alert('Wow!', 'You are strong! Contact admin if you can really lift 1500!');
-            return;
-          }
-          onUpdate(index, 'weight', v);
-        }}
-        keyboardType="decimal-pad"
-        selectTextOnFocus
-      />
+      {set.bw ? (
+        <View style={[styles.setInput, styles.setInputLocked]}>
+          <Text style={styles.setInputLockedText}>B.W.</Text>
+        </View>
+      ) : (
+        <TextInput
+          style={styles.setInput}
+          placeholder="weight"
+          placeholderTextColor={COLORS.textMuted}
+          value={set.weight}
+          onChangeText={v => {
+            const num = parseFloat(v);
+            if (v !== '' && !isNaN(num) && num < 0) {
+              Alert.alert('Invalid', 'Weight cannot be negative.');
+              return;
+            }
+            if (v !== '' && !isNaN(num) && num > 1500) {
+              Alert.alert('Wow!', 'You are strong! Contact admin if you can really lift 1500!');
+              return;
+            }
+            onUpdate(index, 'weight', v);
+          }}
+          keyboardType="decimal-pad"
+          selectTextOnFocus
+        />
+      )}
+      <TouchableOpacity
+        onPress={() => onToggleBW(index)}
+        style={[styles.bwBtn, set.bw && styles.bwBtnActive]}
+        hitSlop={{ top: 6, bottom: 6 }}
+      >
+        <Text style={[styles.bwBtnText, set.bw && styles.bwBtnTextActive]}>BW</Text>
+      </TouchableOpacity>
       <Text style={styles.x}>×</Text>
       <TextInput
         style={styles.setInput}
@@ -101,20 +122,86 @@ function SetRow({ set, index, onUpdate, onDelete, onTagPress, isAboveDropset, un
   );
 }
 
+function seedFromInitial(initial) {
+  if (!Array.isArray(initial) || initial.length === 0) return [];
+  return initial.map(ex => ({
+    name: ex.name || '',
+    sets: (ex.sets || []).map(s => ({
+      weight: s.weight && s.weight > 0 ? String(s.weight) : '',
+      reps: s.reps && s.reps > 0 ? String(s.reps) : '',
+      type: s.type || null,
+      bw: !!s.bw,
+    })),
+    ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
+    ...(ex.unit ? { unit: ex.unit } : {}),
+    ...(ex.note ? { note: ex.note } : {}),
+  }));
+}
+
 export default function NewSessionScreen({ route, navigation }) {
-  const { clientId, name } = route.params;
+  const { clientId, name, initialExercises } = route.params;
   const { user, isInactive } = useAuth();
-  const [exercises, setExercises] = useState([]);
+  const [exercises, setExercises] = useState(() => seedFromInitial(initialExercises));
   const [newExerciseName, setNewExerciseName] = useState('');
   const [saving, setSaving] = useState(false);
   const [pastExercises, setPastExercises] = useState([]);
   const [pastBest, setPastBest] = useState({}); // lowercase name -> { date, weight, reps, unit }
+  const [pastLast, setPastLast] = useState({}); // lowercase name -> { date, weight, reps, unit }
   const [suggestions, setSuggestions] = useState([]);
   const [tagMenu, setTagMenu] = useState(null); // { exIdx, setIdx }
   const [exerciseMenu, setExerciseMenu] = useState(null); // { exIdx }
   const [supersetPicker, setSupersetPicker] = useState(null); // { exIdx }
   const [noteModal, setNoteModal] = useState(null); // { exIdx }
   const [noteInput, setNoteInput] = useState('');
+  const [startTime] = useState(() => Date.now());
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [restDuration, setRestDuration] = useState(90);
+  const [restEndAt, setRestEndAt] = useState(null);
+  const [restRemaining, setRestRemaining] = useState(0);
+  const [durationPicker, setDurationPicker] = useState(false);
+  const restZeroFiredRef = useRef(false);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+
+  useEffect(() => {
+    if (restEndAt == null) {
+      restZeroFiredRef.current = false;
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((restEndAt - Date.now()) / 1000));
+      setRestRemaining(remaining);
+      if (remaining === 0 && !restZeroFiredRef.current) {
+        restZeroFiredRef.current = true;
+        Vibration.vibrate(400);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [restEndAt]);
+
+  function startRest(seconds) {
+    restZeroFiredRef.current = false;
+    setRestRemaining(seconds);
+    setRestEndAt(Date.now() + seconds * 1000);
+  }
+
+  function stopRest() {
+    setRestEndAt(null);
+    setRestRemaining(0);
+  }
+
+  function pickRestDuration(seconds) {
+    setRestDuration(seconds);
+    setDurationPicker(false);
+    startRest(seconds);
+  }
 
   useEffect(() => {
     async function loadPast() {
@@ -122,6 +209,8 @@ export default function NewSessionScreen({ route, navigation }) {
       const snap = await getDocs(q);
       const names = new Set();
       const best = {};
+      const last = {};
+      const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
 
       const sessions = snap.docs
         .map(d => {
@@ -136,27 +225,52 @@ export default function NewSessionScreen({ route, navigation }) {
         for (const ex of s.exercises) {
           names.add(ex.name);
           const key = ex.name?.toLowerCase().trim();
-          if (!key || best[key]) continue;
-          let heaviest = null;
-          for (const set of (ex.sets || [])) {
-            const w = set.weight == null ? 0 : set.weight;
-            if (!heaviest || w > (heaviest.weight == null ? 0 : heaviest.weight)) {
-              heaviest = set;
+          if (!key) continue;
+
+          if (!last[key]) {
+            let h = null;
+            for (const set of (ex.sets || [])) {
+              const w = set.weight == null ? 0 : set.weight;
+              const cur = h == null ? -1 : (h.weight == null ? 0 : h.weight);
+              if (w > cur) h = set;
+            }
+            if (h) {
+              last[key] = {
+                date: s.date,
+                weight: h.weight,
+                reps: h.reps,
+                unit: ex.unit || 'reps',
+              };
             }
           }
-          if (heaviest) {
-            best[key] = {
-              date: s.date,
-              weight: heaviest.weight,
-              reps: heaviest.reps,
-              unit: ex.unit || 'reps',
-            };
+
+          if (s.date.getTime() >= cutoff) {
+            let heaviest = null;
+            for (const set of (ex.sets || [])) {
+              const w = set.weight == null ? 0 : set.weight;
+              if (w <= 0) continue;
+              if (!heaviest || w > heaviest.weight) {
+                heaviest = { weight: w, reps: set.reps || 0 };
+              }
+            }
+            if (heaviest) {
+              const prev = best[key];
+              if (!prev || heaviest.weight > prev.weight) {
+                best[key] = {
+                  date: s.date,
+                  weight: heaviest.weight,
+                  reps: heaviest.reps,
+                  unit: ex.unit || 'reps',
+                };
+              }
+            }
           }
         }
       }
 
       setPastExercises([...names].filter(Boolean).sort());
       setPastBest(best);
+      setPastLast(last);
     }
     loadPast();
   }, [clientId]);
@@ -206,9 +320,9 @@ export default function NewSessionScreen({ route, navigation }) {
         .map(ex => ({
           name: titleCaseExercise(ex.name),
           sets: ex.sets
-            .filter(s => s.weight !== '' || s.reps !== '')
+            .filter(s => s.bw || s.weight !== '' || s.reps !== '')
             .map(s => ({
-              weight: s.weight === '' ? null : (parseFloat(s.weight) || 0),
+              weight: s.bw ? 0 : (s.weight === '' ? null : (parseFloat(s.weight) || 0)),
               reps: parseInt(s.reps) || 0,
               ...(s.type ? { type: s.type } : {}),
             })),
@@ -241,6 +355,7 @@ export default function NewSessionScreen({ route, navigation }) {
         date: serverTimestamp(),
         exercises: cleaned,
         estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
+        durationSec: Math.floor((Date.now() - startTime) / 1000),
       });
       navigation.goBack();
     } catch (e) {
@@ -270,7 +385,7 @@ export default function NewSessionScreen({ route, navigation }) {
   function addExercise() {
     const trimmed = newExerciseName.trim();
     if (!trimmed) return;
-    setExercises(prev => [...prev, { name: trimmed, sets: [{ weight: '', reps: '', type: null }] }]);
+    setExercises(prev => [...prev, { name: trimmed, sets: [{ weight: '', reps: '', type: null, bw: false }] }]);
     setNewExerciseName('');
   }
 
@@ -287,9 +402,24 @@ export default function NewSessionScreen({ route, navigation }) {
           weight: last?.weight || '',
           reps: last?.reps || '',
           type: null,
+          bw: !!last?.bw,
         };
         return { ...ex, sets: [...ex.sets, newSet] };
       })
+    );
+  }
+
+  function toggleSetBW(exIdx, setIdx) {
+    setExercises(prev =>
+      prev.map((ex, i) =>
+        i === exIdx
+          ? { ...ex, sets: ex.sets.map((s, j) => {
+              if (j !== setIdx) return s;
+              const next = !s.bw;
+              return { ...s, bw: next, weight: next ? '' : s.weight };
+            }) }
+          : ex
+      )
     );
   }
 
@@ -390,9 +520,9 @@ export default function NewSessionScreen({ route, navigation }) {
         .map(ex => ({
           name: titleCaseExercise(ex.name),
           sets: ex.sets
-            .filter(s => s.weight !== '' || s.reps !== '')
+            .filter(s => s.bw || s.weight !== '' || s.reps !== '')
             .map(s => ({
-              weight: s.weight === '' ? null : (parseFloat(s.weight) || 0),
+              weight: s.bw ? 0 : (s.weight === '' ? null : (parseFloat(s.weight) || 0)),
               reps: parseInt(s.reps) || 0,
               ...(s.type ? { type: s.type } : {}),
             })),
@@ -425,6 +555,7 @@ export default function NewSessionScreen({ route, navigation }) {
         date: serverTimestamp(),
         exercises: cleaned,
         estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
+        durationSec: Math.floor((Date.now() - startTime) / 1000),
       });
       navigation.goBack();
     } catch (e) {
@@ -438,7 +569,7 @@ export default function NewSessionScreen({ route, navigation }) {
       <ScrollView
         style={styles.container}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 300 }}
+        contentContainerStyle={{ paddingBottom: 140 }}
       >
         <Text style={styles.clientLabel}>{name}</Text>
 
@@ -503,6 +634,7 @@ export default function NewSessionScreen({ route, navigation }) {
                 set={set}
                 index={setIdx}
                 onUpdate={(si, field, val) => updateSet(exIdx, si, field, val)}
+                onToggleBW={(si) => toggleSetBW(exIdx, si)}
                 onDelete={(si) => deleteSet(exIdx, si)}
                 onTagPress={(si) => setTagMenu({ exIdx, setIdx: si })}
                 isAboveDropset={ex.sets[setIdx + 1]?.type === 'dropset'}
@@ -514,15 +646,31 @@ export default function NewSessionScreen({ route, navigation }) {
               <Text style={styles.addSetText}>+ Add Set</Text>
             </TouchableOpacity>
             {(() => {
-              const best = pastBest[ex.name?.toLowerCase().trim()];
-              if (!best) return null;
-              const wStr = best.weight == null || best.weight === 0 ? 'B.W.' : `${best.weight} lbs`;
-              const rStr = best.unit === 'seconds' ? `${best.reps} sec` : best.reps;
-              const dStr = best.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const k = ex.name?.toLowerCase().trim();
+              const last = pastLast[k];
+              const best = pastBest[k];
+              if (!last && !best) return null;
+
+              let lastStr = '';
+              if (last) {
+                const w = last.weight == null || last.weight === 0 ? 'B.W.' : last.weight;
+                const r = last.unit === 'seconds' ? `${last.reps} sec` : last.reps;
+                const d = last.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                lastStr = `Last ${w}×${r} · ${d}`;
+              }
+              let bestStr = '';
+              if (best) {
+                const isSeconds = best.unit === 'seconds';
+                const r = isSeconds ? `${best.reps} sec` : best.reps;
+                const oneRm = isSeconds ? null : Math.round(estimate1RM(best.weight, best.reps));
+                bestStr = `Best ${best.weight}×${r}${oneRm ? `  ·  ${oneRm} 1RM` : ''}`;
+              }
+
               return (
-                <Text style={styles.lastBestText}>
-                  Last: {wStr} × {rStr} · {dStr}
-                </Text>
+                <View style={styles.statsRow}>
+                  <Text style={styles.statLast} numberOfLines={1}>{lastStr}</Text>
+                  <Text style={styles.statBest} numberOfLines={1}>{bestStr}</Text>
+                </View>
               );
             })()}
           </View>
@@ -572,14 +720,50 @@ export default function NewSessionScreen({ route, navigation }) {
           )}
         </View>
 
+      </ScrollView>
+
+      <View style={styles.bottomBar}>
+        <View style={styles.clockBlock}>
+          <Text style={styles.clockLabel}>{restEndAt != null ? 'REST' : 'SESSION'}</Text>
+          <Text
+            style={[
+              styles.clockText,
+              restEndAt != null && styles.clockTextRest,
+              restEndAt != null && restRemaining === 0 && styles.clockTextDone,
+            ]}
+          >
+            {formatDuration(restEndAt != null ? restRemaining : elapsedSec)}
+          </Text>
+        </View>
+        <View style={[styles.restBtnContainer, restEndAt != null && styles.restBtnActive]}>
+          <TouchableOpacity
+            style={styles.restBtnMain}
+            onPress={() => (restEndAt != null ? stopRest() : startRest(restDuration))}
+            onLongPress={() => setDurationPicker(true)}
+            delayLongPress={300}
+          >
+            <Text style={[styles.restBtnText, restEndAt != null && styles.restBtnTextActive]}>
+              {restEndAt != null ? 'Stop' : `Rest ${restDuration}s`}
+            </Text>
+          </TouchableOpacity>
+          {restEndAt == null && (
+            <TouchableOpacity
+              style={styles.restBtnChevron}
+              onPress={() => setDurationPicker(true)}
+              hitSlop={{ top: 6, bottom: 6, right: 6 }}
+            >
+              <Ionicons name="chevron-down" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
         <TouchableOpacity
-          style={[styles.saveBtn, saving && { opacity: 0.5 }]}
+          style={[styles.saveBtnSmall, saving && { opacity: 0.5 }]}
           onPress={saveSession}
           disabled={saving}
         >
-          <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Session'}</Text>
+          <Text style={styles.saveBtnSmallText}>{saving ? 'Saving...' : 'Save'}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </View>
 
       <Modal visible={tagMenu !== null} transparent animationType="fade">
         <Pressable style={styles.tagOverlay} onPress={() => setTagMenu(null)}>
@@ -666,6 +850,25 @@ export default function NewSessionScreen({ route, navigation }) {
                 {exerciseMenu && exercises[exerciseMenu.exIdx]?.note ? 'Edit Note' : 'Add Note'}
               </Text>
             </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={durationPicker} transparent animationType="fade" onRequestClose={() => setDurationPicker(false)}>
+        <Pressable style={styles.tagOverlay} onPress={() => setDurationPicker(false)}>
+          <View style={styles.tagMenu} onStartShouldSetResponder={() => true}>
+            <Text style={styles.tagTitle}>Rest Duration</Text>
+            {[60, 90, 120, 180].map((sec, i, arr) => (
+              <TouchableOpacity
+                key={sec}
+                style={[styles.tagOption, i === arr.length - 1 && { borderBottomWidth: 0 }]}
+                onPress={() => pickRestDuration(sec)}
+              >
+                <Ionicons name="timer-outline" size={16} color={COLORS.accent} style={{ marginRight: 10 }} />
+                <Text style={styles.tagOptionText}>{sec} seconds</Text>
+                {restDuration === sec && <Text style={styles.tagCheck}>✓</Text>}
+              </TouchableOpacity>
+            ))}
           </View>
         </Pressable>
       </Modal>
@@ -783,12 +986,24 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontFamily: FONTS.regular,
   },
-  lastBestText: {
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 8,
+  },
+  statLast: {
+    flex: 1,
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.semiBold,
+  },
+  statBest: {
+    flex: 1,
     color: COLORS.accent,
     fontSize: 12,
-    marginTop: 8,
-    alignSelf: 'flex-start',
     fontFamily: FONTS.semiBold,
+    textAlign: 'right',
   },
   supersetBadge: {
     alignSelf: 'flex-start',
@@ -834,6 +1049,39 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     fontFamily: FONTS.regular,
   },
+  setInputLocked: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  setInputLockedText: {
+    color: COLORS.accent,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    fontFamily: FONTS.bold,
+  },
+  bwBtn: {
+    marginLeft: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  bwBtnActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accent + '22',
+  },
+  bwBtnText: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: FONTS.bold,
+    letterSpacing: 0.5,
+  },
+  bwBtnTextActive: {
+    color: COLORS.accent,
+  },
   x: { color: COLORS.textMuted, marginHorizontal: 8, fontSize: 16 },
   deleteSetBtn: { width: 36, alignItems: 'center', paddingVertical: 4 },
   deleteSetText: { color: COLORS.danger, fontSize: 14 },
@@ -860,13 +1108,90 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent,
   },
   addExBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 15, fontFamily: FONTS.bold },
-  saveBtn: {
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 14,
+    backgroundColor: COLORS.card,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  clockBlock: {
+    flex: 1.4,
+    alignItems: 'flex-start',
+  },
+  clockLabel: {
+    color: COLORS.textMuted,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    fontFamily: FONTS.extraBold,
+    marginBottom: 2,
+  },
+  clockText: {
+    color: COLORS.text,
+    fontSize: 22,
+    fontFamily: FONTS.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  clockTextRest: {
+    color: COLORS.accent,
+  },
+  clockTextDone: {
+    color: COLORS.danger,
+  },
+  restBtnContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    overflow: 'hidden',
+  },
+  restBtnMain: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restBtnChevron: {
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: COLORS.border,
+  },
+  restBtnActive: {
+    borderColor: COLORS.danger,
+    backgroundColor: COLORS.danger + '22',
+  },
+  restBtnText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: FONTS.bold,
+  },
+  restBtnTextActive: {
+    color: COLORS.danger,
+  },
+  saveBtnSmall: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
     backgroundColor: COLORS.accent,
-    borderRadius: 14,
-    padding: 18,
     alignItems: 'center',
   },
-  saveBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  saveBtnSmallText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: '800',
+    fontFamily: FONTS.extraBold,
+  },
   suggestionsBox: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
