@@ -10,8 +10,9 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
 import { handledNoAccess } from '../access';
+import { SAMPLE_WORKOUTS } from '../sampleWorkouts';
 
-const TABS = ['My Saved', 'From Trainer'];
+const TABS = ['My Saved', 'From Trainer', 'Samples'];
 
 function totalSets(workout) {
   return (workout.exercises || []).reduce((sum, ex) => sum + (ex.sets?.length || 0), 0);
@@ -67,28 +68,46 @@ export default function SavedWorkoutsScreen({ navigation }) {
     ]);
   }
 
-  const data = tab === 0 ? bookmarks : assigned;
+  const data = tab === 0 ? bookmarks : tab === 1 ? assigned : SAMPLE_WORKOUTS;
+
+  function startWorkout(item) {
+    navigation.navigate('NewSession', {
+      clientId: user.uid,
+      name: item.title,
+      initialExercises: item.exercises || [],
+    });
+  }
 
   function renderCard({ item }) {
     const exerciseCount = item.exercises?.length || 0;
     const setCount = totalSets(item);
+    const isSample = tab === 2;
+    const isMine = tab === 0;
 
     return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => navigation.navigate('SessionDetail', { sessionId: item.sessionId || null, savedWorkout: item })}
-      >
-        <View style={{ flex: 1 }}>
+      <View style={styles.card}>
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          onPress={() => isSample
+            ? startWorkout(item)
+            : navigation.navigate('SessionDetail', { sessionId: item.sessionId || null, savedWorkout: item })
+          }
+        >
           <Text style={styles.cardTitle}>{item.title}</Text>
           <Text style={styles.cardMeta}>
             {exerciseCount} exercise{exerciseCount !== 1 ? 's' : ''}
             {'  ·  '}
             {setCount} set{setCount !== 1 ? 's' : ''}
           </Text>
+          {item.description ? <Text style={styles.cardNote}>{item.description}</Text> : null}
           {item.note ? <Text style={styles.cardNote}>{item.note}</Text> : null}
-          <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>
-        </View>
-        {tab === 0 ? (
+          {!isSample && <Text style={styles.cardDate}>{formatDate(item.createdAt)}</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.startBtn} onPress={() => startWorkout(item)}>
+          <Ionicons name="play" size={14} color={'#000'} />
+          <Text style={styles.startBtnText}>Start</Text>
+        </TouchableOpacity>
+        {isMine && (
           <TouchableOpacity
             style={styles.deleteBtn}
             onPress={() => confirmDelete(item)}
@@ -96,10 +115,8 @@ export default function SavedWorkoutsScreen({ navigation }) {
           >
             <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
           </TouchableOpacity>
-        ) : (
-          <Ionicons name="barbell-outline" size={20} color={COLORS.accent} />
         )}
-      </TouchableOpacity>
+      </View>
     );
   }
 
@@ -212,6 +229,22 @@ const styles = StyleSheet.create({
   },
   deleteBtn: {
     padding: 8,
+    marginLeft: 4,
+  },
+  startBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  startBtnText: {
+    color: '#000',
+    fontSize: 13,
+    fontFamily: FONTS.bold,
   },
   empty: {
     flex: 1,
