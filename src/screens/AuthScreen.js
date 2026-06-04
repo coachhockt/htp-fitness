@@ -114,7 +114,16 @@ export default function AuthScreen() {
           await AsyncStorage.removeItem('remember_email');
         }
       } else {
-        await register(email.trim(), password);
+        const result = await register(email.trim(), password);
+        if (result?.pending) {
+          setIsLogin(true);
+          setPassword('');
+          setConfirmPassword('');
+          Alert.alert(
+            'Account created',
+            "Your account is awaiting approval. HTPerformance will activate it shortly — you'll be able to log in once it's active."
+          );
+        }
       }
     } catch (e) {
       Alert.alert('Error', e.message);

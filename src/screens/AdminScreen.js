@@ -1,22 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
-  Modal, Pressable,
+  Modal, Pressable, ScrollView,
 } from 'react-native';
 import { db } from '../../firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS } from '../theme';
 
+// Tab order. 'pending' is the approval inbox for new signups.
+const TABS = ['pending', 'inPerson', 'online', 'inactive'];
+
 // Stored category values are kept terse; this maps them to display labels.
-const CATEGORY_LABELS = { inPerson: 'In-Person', online: 'Online', inactive: 'Inactive' };
+const CATEGORY_LABELS = { pending: 'Pending', inPerson: 'In-Person', online: 'Online', inactive: 'Inactive' };
 
 function getCategory(u) {
-  if (u.category === 'inactive' || u.category === 'online' || u.category === 'inPerson') {
+  if (
+    u.category === 'pending' || u.category === 'inactive'
+    || u.category === 'online' || u.category === 'inPerson'
+  ) {
     return u.category;
   }
   // Legacy users (and any stale 'active' values) default to In-Person.
   return 'inPerson';
+}
+
+function formatSignupDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function AdminScreen() {
@@ -58,6 +71,17 @@ export default function AdminScreen() {
     }
   }
 
+  function confirmReject(item) {
+    Alert.alert(
+      'Reject signup?',
+      `${item.email} will be moved to Inactive and won't be able to use the app. You can approve them later from the Inactive tab.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reject', style: 'destructive', onPress: () => moveTo(item.id, 'inactive') },
+      ]
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -66,63 +90,107 @@ export default function AdminScreen() {
     );
   }
 
-  const counts = { inPerson: 0, online: 0, inactive: 0 };
+  const counts = { pending: 0, inPerson: 0, online: 0, inactive: 0 };
   users.forEach(u => { counts[getCategory(u)]++; });
   const visible = users.filter(u => getCategory(u) === tab);
 
   return (
     <View style={styles.container}>
-      <View style={styles.tabBar}>
-        {['inPerson', 'online', 'inactive'].map(t => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.tab, tab === t && styles.tabActive]}
-            onPress={() => setTab(t)}
-          >
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {CATEGORY_LABELS[t]} ({counts[t]})
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabScroll}
+        contentContainerStyle={styles.tabBar}
+      >
+        {TABS.map(t => {
+          const active = tab === t;
+          const pendingAlert = t === 'pending' && counts.pending > 0 && !active;
+          return (
+            <TouchableOpacity
+              key={t}
+              style={[styles.tab, active && styles.tabActive, pendingAlert && styles.tabAlert]}
+              onPress={() => setTab(t)}
+            >
+              <Text style={[
+                styles.tabText,
+                active && styles.tabTextActive,
+                pendingAlert && styles.tabTextAlert,
+              ]}>
+                {CATEGORY_LABELS[t]} ({counts[t]})
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       <FlatList
         data={visible}
         keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.emailRow}>
-                <Text style={styles.email} numberOfLines={1}>{item.email}</Text>
-                {item.isNew && (
-                  <View style={styles.newBadge}>
-                    <Text style={styles.newBadgeText}>NEW</Text>
-                  </View>
+        renderItem={({ item }) => {
+          const isPending = getCategory(item) === 'pending';
+          return (
+            <View style={styles.card}>
+              <View style={{ flex: 1 }}>
+                <View style={styles.emailRow}>
+                  <Text style={styles.email} numberOfLines={1}>{item.email}</Text>
+                  {item.isNew && !isPending && (
+                    <View style={styles.newBadge}>
+                      <Text style={styles.newBadgeText}>NEW</Text>
+                    </View>
+                  )}
+                </View>
+                {isPending && !!formatSignupDate(item.createdAt) && (
+                  <Text style={styles.signupDate}>Signed up {formatSignupDate(item.createdAt)}</Text>
+                )}
+              </View>
+              <View style={styles.actions}>
+                {isPending ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.rejectBtn}
+                      onPress={() => confirmReject(item)}
+                    >
+                      <Text style={styles.rejectBtnText}>Reject</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.approveBtn}
+                      onPress={() => setMoveMenu({
+                        userId: item.id,
+                        email: item.email,
+                        currentCategory: 'pending',
+                        mode: 'approve',
+                      })}
+                    >
+                      <Text style={styles.approveBtnText}>Approve</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {item.isNew && (
+                      <TouchableOpacity
+                        style={styles.dismissBtn}
+                        onPress={() => dismissNew(item.id)}
+                      >
+                        <Text style={styles.dismissBtnText}>Dismiss</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.moveBtn}
+                      onPress={() => setMoveMenu({
+                        userId: item.id,
+                        email: item.email,
+                        currentCategory: getCategory(item),
+                        mode: 'move',
+                      })}
+                    >
+                      <Text style={styles.moveBtnText}>Move</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
               </View>
             </View>
-            <View style={styles.actions}>
-              {item.isNew && (
-                <TouchableOpacity
-                  style={styles.dismissBtn}
-                  onPress={() => dismissNew(item.id)}
-                >
-                  <Text style={styles.dismissBtnText}>Dismiss</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.moveBtn}
-                onPress={() => setMoveMenu({
-                  userId: item.id,
-                  email: item.email,
-                  currentCategory: getCategory(item),
-                })}
-              >
-                <Text style={styles.moveBtnText}>Move</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <Text style={styles.empty}>
             No accounts in {CATEGORY_LABELS[tab]}.
@@ -135,9 +203,15 @@ export default function AdminScreen() {
         <Pressable style={styles.menuOverlay} onPress={() => setMoveMenu(null)}>
           <View style={styles.menuCard} onStartShouldSetResponder={() => true}>
             <Text style={styles.menuTitle} numberOfLines={1}>
-              Move {moveMenu?.email}
+              {moveMenu?.mode === 'approve' ? 'Approve' : 'Move'} {moveMenu?.email}
             </Text>
-            {['inPerson', 'online', 'inactive'].map(c => {
+            {moveMenu?.mode === 'approve' && (
+              <Text style={styles.menuSubtitle}>Choose a category to grant access.</Text>
+            )}
+            {(moveMenu?.mode === 'approve'
+              ? ['inPerson', 'online']
+              : ['inPerson', 'online', 'inactive']
+            ).map(c => {
               const disabled = c === moveMenu?.currentCategory;
               return (
                 <TouchableOpacity
@@ -163,26 +237,31 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
   // Tabs
+  tabScroll: {
+    flexGrow: 0,
+  },
   tabBar: {
-    flexDirection: 'row',
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 4,
     gap: 8,
+    alignItems: 'center',
   },
   tab: {
-    flex: 1,
     paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     borderRadius: 10,
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignItems: 'center',
   },
   tabActive: {
     backgroundColor: COLORS.accent,
     borderColor: COLORS.accent,
+  },
+  tabAlert: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accent + '1A',
   },
   tabText: {
     color: COLORS.textMuted,
@@ -191,6 +270,10 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#000',
+    fontFamily: FONTS.bold,
+  },
+  tabTextAlert: {
+    color: COLORS.accent,
     fontFamily: FONTS.bold,
   },
 
@@ -230,6 +313,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.extraBold,
     letterSpacing: 0.5,
   },
+  signupDate: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    marginTop: 4,
+  },
 
   // Actions
   actions: {
@@ -261,6 +350,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.bold,
   },
+  approveBtn: {
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: COLORS.accent,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+  },
+  approveBtnText: {
+    color: '#000',
+    fontSize: 13,
+    fontFamily: FONTS.bold,
+  },
+  rejectBtn: {
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  rejectBtnText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontFamily: FONTS.semiBold,
+  },
 
   empty: {
     color: COLORS.textMuted,
@@ -291,6 +405,14 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontFamily: FONTS.bold,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  menuSubtitle: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontFamily: FONTS.regular,
+    marginTop: -6,
     marginBottom: 12,
     textAlign: 'center',
   },

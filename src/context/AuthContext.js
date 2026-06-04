@@ -35,7 +35,9 @@ export function AuthProvider({ children }) {
       doc(db, 'users', user.uid),
       (snap) => {
         const d = snap.data() || {};
-        setIsInactive(d.category === 'inactive' || d.status === 'closed');
+        setIsInactive(
+          d.category === 'inactive' || d.category === 'pending' || d.status === 'closed'
+        );
       },
       () => {} // ignore listener errors (e.g. transient permission blips)
     );
@@ -87,29 +89,35 @@ export function AuthProvider({ children }) {
     // Sign into Firebase Auth SDK so Firestore rules can verify identity
     await signInWithEmailAndPassword(getAuth(), email, password);
 
-    // Now that we're authenticated, verify the account is still active
+    // Now that we're authenticated, load (or create) the account doc.
     const userDocRef = doc(db, 'users', data.localId);
-    const userDocSnap = await getDoc(userDocRef);
-    if (userDocSnap.exists()) {
-      const userData = userDocSnap.data();
-      if (userData.category === 'inactive' || userData.status === 'closed') {
-        await signOut(getAuth());
-        throw new Error('Your account is inactive. Contact admin.');
-      }
-    } else {
+    let userDocSnap = await getDoc(userDocRef);
+    if (!userDocSnap.exists()) {
+      // First login for an auth account with no Firestore doc. Non-admins start
+      // 'pending' and must be approved before they can use the app.
       const role = data.email === ADMIN_EMAIL ? 'admin' : 'user';
       await setDoc(userDocRef, {
         email: data.email,
         role,
         status: 'active',
-        category: 'inPerson',
+        category: role === 'admin' ? 'inPerson' : 'pending',
         isNew: true,
         createdAt: new Date().toISOString(),
       });
+      userDocSnap = await getDoc(userDocRef);
     }
 
-    const userDocFresh = await getDoc(userDocRef);
-    const userData = userDocFresh.data() || {};
+    const userData = userDocSnap.data() || {};
+
+    // Gate access: pending awaits approval, inactive/closed is deactivated.
+    if (userData.category === 'pending') {
+      await signOut(getAuth());
+      throw new Error("Your account is awaiting approval. HTPerformance will activate it shortly.");
+    }
+    if (userData.category === 'inactive' || userData.status === 'closed') {
+      await signOut(getAuth());
+      throw new Error('Your account is inactive. Contact HTPerformance.');
+    }
 
     const u = {
       uid: data.localId,
@@ -138,11 +146,13 @@ export function AuthProvider({ children }) {
     await signInWithEmailAndPassword(getAuth(), email, password);
 
     const role = data.email === ADMIN_EMAIL ? 'admin' : 'user';
+    // New non-admin accounts start 'pending' — no access until the trainer approves.
+    const isPending = role !== 'admin';
     const userDoc = {
       email: data.email,
       role,
       status: 'active',
-      category: 'inPerson',
+      category: isPending ? 'pending' : 'inPerson',
       isNew: true,
       createdAt: new Date().toISOString(),
     };
@@ -165,10 +175,18 @@ export function AuthProvider({ children }) {
       );
     } catch (e) {}
 
+    if (isPending) {
+      // Don't grant access or persist a session — bounce back to the login
+      // screen. The caller surfaces the "awaiting approval" message.
+      try { await signOut(getAuth()); } catch (e) {}
+      return { pending: true };
+    }
+
     const u = { uid: data.localId, email: data.email, role, profile: null };
     setUser(u);
     await AsyncStorage.setItem('user', JSON.stringify(u));
     await saveCredentials(email, password);
+    return { pending: false };
   }
 
   async function saveCredentials(email, password) {
