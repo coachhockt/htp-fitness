@@ -50,7 +50,9 @@ function hkPermissions(HK) {
 
 function hkInit(HK) {
   return new Promise((resolve) => {
-    HK.initHealthKit(hkPermissions(HK), (err) => resolve(!err));
+    HK.initHealthKit(hkPermissions(HK), (err) => {
+      resolve({ ok: !err, error: err ? (typeof err === 'string' ? err : JSON.stringify(err)) : null });
+    });
   });
 }
 
@@ -104,26 +106,33 @@ export async function isStepsAvailable() {
   }
 }
 
-// Prompt the user for read access to step data. Returns true if access was granted/initialized.
+// Prompt the user for read access to step data.
+// Returns { ok: boolean, error: string|null } so the UI can surface the real reason.
 export async function requestStepAccess() {
   try {
     if (Platform.OS === 'ios') {
       const HK = getHealthKit();
-      if (!HK) return false;
+      if (!HK) return { ok: false, error: 'react-native-health module not found (require failed)' };
+      if (typeof HK.initHealthKit !== 'function') {
+        // Object exists (Constants present) but native methods are missing — the native
+        // module didn't register, typically the New Architecture not loading an old module.
+        return { ok: false, error: 'native HealthKit module not registered (initHealthKit missing — likely New Architecture)' };
+      }
       // Note: HealthKit never reveals whether READ access was denied (privacy), so a
       // successful init means "ready to try reading", not a guaranteed grant.
       return await hkInit(HK);
     }
     if (Platform.OS === 'android') {
       const HC = getHealthConnect();
-      if (!HC) return false;
+      if (!HC) return { ok: false, error: 'react-native-health-connect module not found' };
       await HC.initialize();
       const granted = await HC.requestPermission([{ accessType: 'read', recordType: 'Steps' }]);
-      return Array.isArray(granted) && granted.length > 0;
+      const ok = Array.isArray(granted) && granted.length > 0;
+      return { ok, error: ok ? null : 'permission not granted' };
     }
-    return false;
+    return { ok: false, error: 'unsupported platform' };
   } catch (e) {
-    return false;
+    return { ok: false, error: e?.message || String(e) };
   }
 }
 

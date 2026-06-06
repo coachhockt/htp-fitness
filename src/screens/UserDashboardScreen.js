@@ -82,7 +82,7 @@ export default function UserDashboardScreen({ navigation }) {
       // If the user connected before, silently re-authorize (no prompt when already granted) and refresh.
       const connected = await AsyncStorage.getItem('stepsConnected');
       if (connected === '1') {
-        const ok = await requestStepAccess();
+        const { ok } = await requestStepAccess();
         if (!mounted) return;
         setStepsAuthorized(ok);
         stepsAuthedRef.current = ok;
@@ -292,7 +292,7 @@ export default function UserDashboardScreen({ navigation }) {
   }
 
   async function connectSteps() {
-    const ok = await requestStepAccess();
+    const { ok, error } = await requestStepAccess();
     setStepsAuthorized(ok);
     stepsAuthedRef.current = ok;
     if (ok) {
@@ -302,10 +302,7 @@ export default function UserDashboardScreen({ navigation }) {
       setStepsToday(today);
       setWeeklySteps(week);
     } else {
-      Alert.alert(
-        'Step Tracking',
-        'Could not connect to your health data. You can enable step access later in your device’s Health settings.'
-      );
+      Alert.alert('Step Tracking — Debug', error || 'Could not connect to your health data.');
     }
   }
 
