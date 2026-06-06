@@ -12,7 +12,8 @@ let _hc = null; // react-native-health-connect (Android)
 
 function getHealthKit() {
   if (_hk === null) {
-    try { _hk = require('react-native-health').default || false; }
+    // react-native-health uses `module.exports = HealthKit` (no `.default`).
+    try { const m = require('react-native-health'); _hk = m.default || m || false; }
     catch (e) { _hk = false; }
   }
   return _hk || null;
@@ -20,7 +21,7 @@ function getHealthKit() {
 
 function getHealthConnect() {
   if (_hc === null) {
-    try { _hc = require('react-native-health-connect'); }
+    try { const m = require('react-native-health-connect'); _hc = m.default || m || false; }
     catch (e) { _hc = false; }
   }
   return _hc || null;

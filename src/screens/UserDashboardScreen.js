@@ -296,6 +296,7 @@ export default function UserDashboardScreen({ navigation }) {
     setStepsAuthorized(ok);
     stepsAuthedRef.current = ok;
     if (ok) {
+      setStepsAvailable(true);
       await AsyncStorage.setItem('stepsConnected', '1');
       const [today, week] = await Promise.all([getTodaySteps(), getWeeklySteps()]);
       setStepsToday(today);
@@ -783,6 +784,19 @@ export default function UserDashboardScreen({ navigation }) {
                 <TouchableOpacity style={styles.settingsBtn} onPress={() => setSettingsView('password')}>
                   <Ionicons name="lock-closed-outline" size={18} color={COLORS.text} />
                   <Text style={styles.settingsBtnText}>Change Password</Text>
+                  <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.settingsBtn} onPress={connectSteps}>
+                  <Ionicons
+                    name={stepsAuthorized ? 'checkmark-circle' : 'fitness-outline'}
+                    size={18}
+                    color={stepsAuthorized ? COLORS.accent : COLORS.text}
+                  />
+                  <Text style={styles.settingsBtnText}>
+                    {stepsAuthorized
+                      ? `${Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'} connected`
+                      : `Connect ${Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'}`}
+                  </Text>
                   <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
                 </TouchableOpacity>
               </>
