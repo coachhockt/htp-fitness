@@ -448,30 +448,28 @@ export default function UserDashboardScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {stepsAvailable && (
-          stepsAuthorized ? (
-            <View style={styles.stepsCard}>
-              <View style={styles.stepsIconWrap}>
-                <Ionicons name="footsteps" size={22} color={COLORS.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stepsCount}>{stepsToday.toLocaleString()}</Text>
-                <Text style={styles.stepsLabel}>Steps today</Text>
-              </View>
-              <View style={styles.stepsWeek}>
-                <Text style={styles.stepsWeekCount}>{weeklySteps.toLocaleString()}</Text>
-                <Text style={styles.stepsWeekLabel}>this week</Text>
-              </View>
+        {stepsAuthorized ? (
+          <View style={styles.stepsCard}>
+            <View style={styles.stepsIconWrap}>
+              <Ionicons name="footsteps" size={22} color={COLORS.accent} />
             </View>
-          ) : (
-            <TouchableOpacity style={styles.stepsConnect} onPress={connectSteps} activeOpacity={0.7}>
-              <Ionicons name="footsteps" size={20} color={COLORS.accent} />
-              <Text style={styles.stepsConnectText}>
-                Connect {Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'} to track steps
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          )
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stepsCount}>{stepsToday.toLocaleString()}</Text>
+              <Text style={styles.stepsLabel}>Steps today</Text>
+            </View>
+            <View style={styles.stepsWeek}>
+              <Text style={styles.stepsWeekCount}>{weeklySteps.toLocaleString()}</Text>
+              <Text style={styles.stepsWeekLabel}>this week</Text>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.stepsConnect} onPress={connectSteps} activeOpacity={0.7}>
+            <Ionicons name="footsteps" size={20} color={COLORS.accent} />
+            <Text style={styles.stepsConnectText}>
+              Connect {Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'} to track steps
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+          </TouchableOpacity>
         )}
 
         <View style={{ marginBottom: 20 }}>
