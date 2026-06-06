@@ -13,6 +13,7 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
