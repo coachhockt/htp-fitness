@@ -292,7 +292,7 @@ export default function UserDashboardScreen({ navigation }) {
   }
 
   async function connectSteps() {
-    const { ok, error } = await requestStepAccess();
+    const { ok } = await requestStepAccess();
     setStepsAuthorized(ok);
     stepsAuthedRef.current = ok;
     if (ok) {
@@ -302,7 +302,10 @@ export default function UserDashboardScreen({ navigation }) {
       setStepsToday(today);
       setWeeklySteps(week);
     } else {
-      Alert.alert('Step Tracking — Debug', error || 'Could not connect to your health data.');
+      Alert.alert(
+        'Step Tracking',
+        `Could not connect to ${Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'}. You can enable step access in your device’s Health settings and try again.`
+      );
     }
   }
 
