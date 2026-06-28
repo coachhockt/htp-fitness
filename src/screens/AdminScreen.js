@@ -6,7 +6,7 @@ import {
 import { db } from '../../firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 
 // Tab order. 'pending' is the approval inbox for new signups.
 const TABS = ['pending', 'inPerson', 'online', 'inactive'];
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   tabTextActive: {
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   // Card
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -296,8 +296,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   email: {
-    color: COLORS.text,
-    fontSize: 15,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
     flexShrink: 1,
   },
@@ -309,13 +309,13 @@ const styles = StyleSheet.create({
   },
   newBadgeText: {
     color: '#000',
-    fontSize: 10,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.extraBold,
     letterSpacing: 0.5,
   },
   signupDate: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     marginTop: 4,
   },
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   },
   dismissBtnText: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   moveBtn: {
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
   },
   moveBtnText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.bold,
   },
   approveBtn: {
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
   },
   approveBtnText: {
     color: '#000',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.bold,
   },
   rejectBtn: {
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   },
   rejectBtnText: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
 
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 60,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
 
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   },
   menuCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     width: '100%',
     maxWidth: 360,
@@ -402,15 +402,15 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   menuTitle: {
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.bold,
     marginBottom: 12,
     textAlign: 'center',
   },
   menuSubtitle: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     marginTop: -6,
     marginBottom: 12,
@@ -425,8 +425,8 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   menuOptionText: {
-    color: COLORS.text,
-    fontSize: 15,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
     textAlign: 'center',
   },

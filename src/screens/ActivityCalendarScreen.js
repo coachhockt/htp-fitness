@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, doc, getDoc, setDoc, addDoc, Timestamp, orderBy, onSnapshot, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { handledNoAccess } from '../access';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { requestPermissions, scheduleWeeklyReminders, scheduleDateReminder } from '../utils/notifications';
@@ -483,11 +483,11 @@ export default function ActivityCalendarScreen({ navigation, route }) {
       {/* Calendar Header */}
       <View style={styles.calHeader}>
         <TouchableOpacity onPress={prevMonth} style={styles.navBtn}>
-          <Ionicons name="chevron-back" size={22} color={COLORS.text} />
+          <Ionicons name="chevron-back" size={22} color={COLORS.textBright} />
         </TouchableOpacity>
         <Text style={styles.calTitle}>{formatMonth(year, month)}</Text>
         <TouchableOpacity onPress={nextMonth} style={styles.navBtn}>
-          <Ionicons name="chevron-forward" size={22} color={COLORS.text} />
+          <Ionicons name="chevron-forward" size={22} color={COLORS.textBright} />
         </TouchableOpacity>
       </View>
 
@@ -775,8 +775,8 @@ export default function ActivityCalendarScreen({ navigation, route }) {
             ) : (
               <>
                 <TouchableOpacity style={[styles.dayModalBtn, styles.dayModalBtnRemove]} onPress={handleRemoveSchedule}>
-                  <Ionicons name="close-circle-outline" size={18} color={COLORS.text} />
-                  <Text style={[styles.dayModalBtnText, { color: COLORS.text }]}>Remove schedule</Text>
+                  <Ionicons name="close-circle-outline" size={18} color={COLORS.textBright} />
+                  <Text style={[styles.dayModalBtnText, { color: COLORS.textBright }]}>Remove schedule</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.dayModalClose} onPress={() => setDayModalVisible(false)}>
                   <Text style={styles.dayModalCloseText}>Cancel</Text>
@@ -795,15 +795,15 @@ const styles = StyleSheet.create({
 
   // Calendar
   calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  calTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700', fontFamily: FONTS.bold },
+  calTitle: { color: COLORS.textBright, fontSize: TYPE.heading, fontWeight: '700', fontFamily: FONTS.bold },
   navBtn: { padding: 8 },
   weekRow: { flexDirection: 'row', marginBottom: 8 },
-  weekLabel: { flex: 1, textAlign: 'center', color: COLORS.textMuted, fontSize: 12, fontWeight: '600', fontFamily: FONTS.semiBold },
+  weekLabel: { flex: 1, textAlign: 'center', color: COLORS.textMuted, fontSize: TYPE.label, fontWeight: '600', fontFamily: FONTS.semiBold },
   grid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
   cell: { width: '14.28%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
   dayCircle: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
   todayCircle: { borderWidth: 2, borderColor: COLORS.accent },
-  dayText: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.regular },
+  dayText: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.regular },
   todayText: { color: COLORS.accent, fontWeight: '700', fontFamily: FONTS.bold },
   pastDay: { opacity: 0.4 },
   pastDayText: { color: COLORS.textMuted },
@@ -816,10 +816,10 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   todayLegend: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: COLORS.accent },
-  legendText: { color: COLORS.textMuted, fontSize: 11, fontFamily: FONTS.regular },
+  legendText: { color: COLORS.textMuted, fontSize: TYPE.caption, fontFamily: FONTS.regular },
 
   // Schedule
-  sectionTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 16 },
+  sectionTitle: { color: COLORS.textBright, fontSize: TYPE.heading, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 16 },
   daysRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   dayToggle: {
     flex: 1,
@@ -832,51 +832,51 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   dayToggleActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent + '20' },
-  dayToggleText: { color: COLORS.textMuted, fontSize: 11, fontWeight: '600', fontFamily: FONTS.semiBold },
+  dayToggleText: { color: COLORS.textMuted, fontSize: TYPE.caption, fontWeight: '600', fontFamily: FONTS.semiBold },
   dayToggleTextActive: { color: COLORS.accent },
-  dayLabelText: { color: COLORS.accent, fontSize: 8, fontFamily: FONTS.regular, marginTop: 2 },
-  hint: { color: COLORS.textMuted, fontSize: 11, fontFamily: FONTS.regular, textAlign: 'center', marginBottom: 20 },
+  dayLabelText: { color: COLORS.accent, fontSize: TYPE.caption, fontFamily: FONTS.regular, marginTop: 2 },
+  hint: { color: COLORS.textMuted, fontSize: TYPE.caption, fontFamily: FONTS.regular, textAlign: 'center', marginBottom: 20 },
 
   // Reminder
   reminderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, backgroundColor: COLORS.card, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: COLORS.border },
   reminderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  reminderLabel: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.regular },
+  reminderLabel: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.regular },
   timeBtn: { backgroundColor: COLORS.background, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.border },
-  timeText: { color: COLORS.accent, fontSize: 14, fontWeight: '700', fontFamily: FONTS.bold },
+  timeText: { color: COLORS.accent, fontSize: TYPE.body, fontWeight: '700', fontFamily: FONTS.bold },
   dayTimeList: { backgroundColor: COLORS.card, borderRadius: 12, padding: 14, marginBottom: 24, borderWidth: 1, borderColor: COLORS.border, gap: 8 },
   dayTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
-  dayTimeDay: { color: COLORS.text, fontSize: 14, fontFamily: FONTS.semiBold, width: 44 },
-  dayTimeNote: { flex: 1, color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
+  dayTimeDay: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.semiBold, width: 44 },
+  dayTimeNote: { flex: 1, color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
   specificTimeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  specificTimeLabel: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.regular },
+  specificTimeLabel: { color: COLORS.textBright, fontSize: TYPE.label, fontFamily: FONTS.regular },
 
   // Save
-  saveBtn: { backgroundColor: COLORS.accent, borderRadius: 14, padding: 18, alignItems: 'center' },
-  saveBtnText: { color: '#000', fontWeight: '800', fontSize: 15, fontFamily: FONTS.extraBold },
+  saveBtn: { backgroundColor: COLORS.accent, borderRadius: RADIUS.md, padding: 18, alignItems: 'center' },
+  saveBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.body, fontFamily: FONTS.extraBold },
 
   // Pickers
   pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  pickerContainer: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: '90%' },
+  pickerContainer: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 16, width: '90%' },
   pickerDone: { alignItems: 'center', padding: 12, marginTop: 8 },
-  pickerDoneText: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
+  pickerDoneText: { color: COLORS.accent, fontSize: TYPE.body, fontWeight: '700', fontFamily: FONTS.bold },
 
   // Label Modal
-  labelModal: { backgroundColor: COLORS.card, borderRadius: 14, padding: 24, width: '80%' },
-  labelTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 16, textAlign: 'center' },
-  labelInput: { backgroundColor: COLORS.background, borderRadius: 10, padding: 14, color: COLORS.text, fontSize: 15, borderWidth: 1, borderColor: COLORS.border, fontFamily: FONTS.regular, marginBottom: 16 },
+  labelModal: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 24, width: '80%' },
+  labelTitle: { color: COLORS.textBright, fontSize: TYPE.heading, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 16, textAlign: 'center' },
+  labelInput: { backgroundColor: COLORS.background, borderRadius: 10, padding: 14, color: COLORS.textBright, fontSize: TYPE.body, borderWidth: 1, borderColor: COLORS.border, fontFamily: FONTS.regular, marginBottom: 16 },
   labelSaveBtn: { backgroundColor: COLORS.accent, borderRadius: 10, padding: 14, alignItems: 'center' },
-  labelSaveBtnText: { color: '#000', fontWeight: '700', fontSize: 14, fontFamily: FONTS.bold },
+  labelSaveBtnText: { color: '#000', fontWeight: '700', fontSize: TYPE.body, fontFamily: FONTS.bold },
 
   // Day Tap Modal
-  dayModal: { backgroundColor: COLORS.card, borderRadius: 14, padding: 24, width: '80%' },
-  dayModalTitle: { color: COLORS.text, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 20, textAlign: 'center' },
+  dayModal: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 24, width: '80%' },
+  dayModalTitle: { color: COLORS.textBright, fontSize: TYPE.heading, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 20, textAlign: 'center' },
   dayModalBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.accent, borderRadius: 10, padding: 14, marginBottom: 10 },
   dayModalBtnRemove: { backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.border },
-  dayModalBtnText: { color: '#000', fontWeight: '600', fontSize: 14, fontFamily: FONTS.semiBold },
-  dayModalSubtitle: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular, marginBottom: 12, textAlign: 'center' },
-  specificLabelInput: { backgroundColor: COLORS.background, borderRadius: 10, padding: 14, color: COLORS.text, fontSize: 15, borderWidth: 1, borderColor: COLORS.border, fontFamily: FONTS.regular, marginBottom: 14 },
+  dayModalBtnText: { color: '#000', fontWeight: '600', fontSize: TYPE.body, fontFamily: FONTS.semiBold },
+  dayModalSubtitle: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular, marginBottom: 12, textAlign: 'center' },
+  specificLabelInput: { backgroundColor: COLORS.background, borderRadius: 10, padding: 14, color: COLORS.textBright, fontSize: TYPE.body, borderWidth: 1, borderColor: COLORS.border, fontFamily: FONTS.regular, marginBottom: 14 },
   dayModalClose: { alignItems: 'center', padding: 12, marginTop: 4 },
-  dayModalCloseText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular },
+  dayModalCloseText: { color: COLORS.textMuted, fontSize: TYPE.body, fontFamily: FONTS.regular },
 
   // Session History
   sessionCard: {
@@ -889,12 +889,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  sessionDate: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
-  sessionMeta: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontFamily: FONTS.regular },
+  sessionDate: { color: COLORS.textBright, fontWeight: '600', fontSize: TYPE.body, fontFamily: FONTS.semiBold },
+  sessionMeta: { color: COLORS.textMuted, fontSize: TYPE.label, marginTop: 3, fontFamily: FONTS.regular },
   bookmarkBtn: { padding: 8, marginRight: 4 },
   sessionDeleteBtn: { position: 'absolute', top: 8, right: 10, padding: 4 },
-  sessionDeleteText: { color: COLORS.textMuted, fontSize: 10, fontFamily: FONTS.semiBold },
-  emptyHistory: { color: COLORS.textMuted, textAlign: 'center', marginTop: 20, fontSize: 13, fontFamily: FONTS.regular },
+  sessionDeleteText: { color: COLORS.textMuted, fontSize: TYPE.caption, fontFamily: FONTS.semiBold },
+  emptyHistory: { color: COLORS.textMuted, textAlign: 'center', marginTop: 20, fontSize: TYPE.label, fontFamily: FONTS.regular },
   pagination: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pageBtnDisabled: { opacity: 0.3 },
-  pageBtnText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.semiBold },
+  pageBtnText: { color: COLORS.textBright, fontSize: TYPE.label, fontFamily: FONTS.semiBold },
   pageBtnTextDisabled: { color: COLORS.textMuted },
-  pageInfo: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.regular },
+  pageInfo: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
 });

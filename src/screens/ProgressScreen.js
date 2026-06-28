@@ -6,7 +6,7 @@ import {
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { LineChart } from 'react-native-chart-kit';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 
 const CHART_WIDTH = Dimensions.get('window').width - 72;
 
@@ -41,7 +41,7 @@ export default function ProgressScreen({ route, navigation }) {
       navigation.setOptions({
         headerLeft: () => (
           <TouchableOpacity onPress={() => setMode('exercise')} style={{ paddingRight: 16 }}>
-            <Text style={{ color: COLORS.text, fontSize: 17 }}>‹ Back</Text>
+            <Text style={{ color: COLORS.textBright, fontSize: TYPE.heading }}>‹ Back</Text>
           </TouchableOpacity>
         ),
       });
@@ -523,11 +523,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   modeBtnActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  modeBtnText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.semiBold },
+  modeBtnText: { color: COLORS.textMuted, fontSize: TYPE.body, fontFamily: FONTS.semiBold },
   modeBtnTextActive: { color: '#000' },
   sectionLabel: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -538,11 +538,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: 10,
     padding: 13,
-    color: COLORS.text,
+    color: COLORS.textBright,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
   pills: { marginBottom: 24, maxHeight: 40 },
@@ -556,32 +556,32 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
   },
   pillActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
-  pillText: { color: COLORS.textMuted, fontSize: 14, fontWeight: '600', fontFamily: FONTS.semiBold },
+  pillText: { color: COLORS.textMuted, fontSize: TYPE.body, fontWeight: '600', fontFamily: FONTS.semiBold },
   pillTextActive: { color: '#000' },
   chartCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  chartTitle: { color: COLORS.text, fontWeight: '700', fontSize: 15, marginBottom: 4, fontFamily: FONTS.bold },
-  chartSubtitle: { color: COLORS.textMuted, fontSize: 11, marginBottom: 14, fontFamily: FONTS.regular },
+  chartTitle: { color: COLORS.textBright, fontWeight: '700', fontSize: TYPE.body, marginBottom: 4, fontFamily: FONTS.bold },
+  chartSubtitle: { color: COLORS.textMuted, fontSize: TYPE.caption, marginBottom: 14, fontFamily: FONTS.regular },
   chart: { borderRadius: 10 },
-  delta: { color: COLORS.accent, fontSize: 13, fontWeight: '600', marginTop: 10, textAlign: 'right', fontFamily: FONTS.semiBold },
+  delta: { color: COLORS.accent, fontSize: TYPE.label, fontWeight: '600', marginTop: 10, textAlign: 'right', fontFamily: FONTS.semiBold },
   chartFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 8 },
-  mostRecent: { color: '#D4872A', fontSize: 13, fontWeight: '700', fontFamily: FONTS.bold, flexShrink: 1 },
+  mostRecent: { color: '#D4872A', fontSize: TYPE.label, fontWeight: '700', fontFamily: FONTS.bold, flexShrink: 1 },
   statsCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   statsTitle: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -590,10 +590,10 @@ const styles = StyleSheet.create({
   },
   statsRow: { flexDirection: 'row' },
   statItem: { flex: 1, alignItems: 'center' },
-  statVal: { color: COLORS.accent, fontSize: 24, fontWeight: '800', fontFamily: FONTS.extraBold },
+  statVal: { color: COLORS.accent, fontSize: TYPE.display, fontWeight: '800', fontFamily: FONTS.extraBold },
   statLabel: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '600',
     marginTop: 2,
     textTransform: 'uppercase',
@@ -610,18 +610,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: 10,
     padding: 12,
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     borderWidth: 1,
     borderColor: COLORS.border,
     textAlign: 'center',
     fontFamily: FONTS.regular,
   },
-  dateTo: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
-  clearDates: { color: COLORS.accent, fontSize: 13, fontWeight: '600', marginBottom: 16, fontFamily: FONTS.semiBold },
+  dateTo: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
+  clearDates: { color: COLORS.accent, fontSize: TYPE.label, fontWeight: '600', marginBottom: 16, fontFamily: FONTS.semiBold },
   selectedLabel: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontWeight: '700',
     marginBottom: 16,
     fontFamily: FONTS.bold,
@@ -644,9 +644,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  fullscreenCloseText: { color: COLORS.text, fontSize: 14, fontWeight: '600', fontFamily: FONTS.semiBold },
-  fullscreenTitle: { color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: 20, fontFamily: FONTS.bold },
+  fullscreenCloseText: { color: COLORS.textBright, fontSize: TYPE.body, fontWeight: '600', fontFamily: FONTS.semiBold },
+  fullscreenTitle: { color: COLORS.textBright, fontSize: TYPE.heading, fontWeight: '700', marginBottom: 20, fontFamily: FONTS.bold },
   fullscreenChart: { borderRadius: 12 },
-  empty: { color: COLORS.textMuted, textAlign: 'center', marginTop: 60, fontSize: 15, fontFamily: FONTS.regular },
-  notice: { color: COLORS.textMuted, textAlign: 'center', marginTop: 20, marginBottom: 20, fontSize: 14, lineHeight: 22, fontFamily: FONTS.regular },
+  empty: { color: COLORS.textMuted, textAlign: 'center', marginTop: 60, fontSize: TYPE.body, fontFamily: FONTS.regular },
+  notice: { color: COLORS.textMuted, textAlign: 'center', marginTop: 20, marginBottom: 20, fontSize: TYPE.body, lineHeight: 22, fontFamily: FONTS.regular },
 });

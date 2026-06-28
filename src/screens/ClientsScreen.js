@@ -8,7 +8,7 @@ import { db } from '../../firebase';
 import { collection, addDoc, query, where, onSnapshot, serverTimestamp, doc, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getSessionsRemaining } from '../utils';
 import ProfileMenu from '../components/ProfileMenu';
 
@@ -353,17 +353,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
   },
-  title: { fontSize: 24, fontWeight: '800', color: COLORS.text, fontFamily: FONTS.extraBold },
+  title: { fontSize: TYPE.display, fontWeight: '800', color: COLORS.textBright, fontFamily: FONTS.extraBold },
   search: {
     backgroundColor: COLORS.card,
     marginHorizontal: 20,
     borderRadius: 10,
     padding: 13,
-    color: COLORS.text,
+    color: COLORS.textBright,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
   card: {
@@ -386,8 +386,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
-  avatarText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
-  name: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold, flexShrink: 1 },
+  avatarText: { color: '#000', fontWeight: '800', fontSize: TYPE.heading, fontFamily: FONTS.extraBold },
+  name: { color: COLORS.textBright, fontWeight: '600', fontSize: TYPE.body, fontFamily: FONTS.semiBold, flexShrink: 1 },
   appBadge: {
     backgroundColor: COLORS.accent + '22',
     borderRadius: 6,
@@ -398,12 +398,12 @@ const styles = StyleSheet.create({
   },
   appBadgeText: {
     color: COLORS.accent,
-    fontSize: 9,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.extraBold,
     letterSpacing: 0.5,
   },
-  sessionCount: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, fontFamily: FONTS.regular },
-  phone: { color: COLORS.textMuted, fontSize: 12, marginTop: 2, fontFamily: FONTS.regular },
+  sessionCount: { color: COLORS.textMuted, fontSize: TYPE.label, marginTop: 2, fontFamily: FONTS.regular },
+  phone: { color: COLORS.textMuted, fontSize: TYPE.label, marginTop: 2, fontFamily: FONTS.regular },
   deleteBtn: {
     position: 'absolute',
     top: 8,
@@ -412,14 +412,14 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.semiBold,
   },
   empty: {
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 80,
-    fontSize: 15,
+    fontSize: TYPE.body,
     lineHeight: 24,
     fontFamily: FONTS.regular,
   },
@@ -429,11 +429,11 @@ const styles = StyleSheet.create({
     right: 24,
     left: 24,
     backgroundColor: COLORS.accent,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 17,
     alignItems: 'center',
   },
-  fabText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  fabText: { color: '#000', fontWeight: '800', fontSize: TYPE.heading, fontFamily: FONTS.extraBold },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
   modal: {
     backgroundColor: COLORS.card,
@@ -444,18 +444,18 @@ const styles = StyleSheet.create({
     maxHeight: '85%',
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: '700', fontFamily: FONTS.bold },
+  modalTitle: { color: COLORS.textBright, fontSize: TYPE.title, fontWeight: '700', fontFamily: FONTS.bold },
   closeBtn: { padding: 4 },
-  closeBtnText: { color: COLORS.textMuted, fontSize: 20, fontWeight: '600', fontFamily: FONTS.semiBold },
+  closeBtnText: { color: COLORS.textMuted, fontSize: TYPE.title, fontWeight: '600', fontFamily: FONTS.semiBold },
   input: {
     backgroundColor: COLORS.background,
     borderRadius: 10,
     padding: 14,
-    color: COLORS.text,
+    color: COLORS.textBright,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
   nameRow: { flexDirection: 'row', gap: 10 },
@@ -470,5 +470,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  modalBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  modalBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.heading, fontFamily: FONTS.extraBold },
 });

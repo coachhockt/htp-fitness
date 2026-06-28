@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 
 export default function CreateProfileScreen() {
   const { saveProfile } = useAuth();
@@ -143,15 +143,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    color: COLORS.text,
-    fontSize: 22,
+    color: COLORS.textBright,
+    fontSize: TYPE.title,
     fontFamily: FONTS.bold,
     textAlign: 'center',
     marginBottom: 32,
   },
   label: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
     marginBottom: 8,
     marginLeft: 4,
@@ -162,8 +162,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
-    color: COLORS.text,
-    fontSize: 16,
+    color: COLORS.textBright,
+    fontSize: TYPE.heading,
     marginBottom: 12,
     fontFamily: FONTS.regular,
   },
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   sexBtnText: {
     color: COLORS.textMuted,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   sexBtnTextActive: {
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#000',
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: TYPE.heading,
     fontFamily: FONTS.extraBold,
   },
 });

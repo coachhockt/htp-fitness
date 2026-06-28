@@ -11,7 +11,7 @@ import {
   doc, getDoc, setDoc, addDoc, serverTimestamp,
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getSessionsRemaining, titleCaseExercise } from '../utils';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, handledNoAccess } from '../access';
@@ -376,7 +376,7 @@ export default function ClientDetailScreen({ route, navigation }) {
                           style={styles.viewHistoryBtn}
                           onPress={() => navigation.navigate('PurchaseHistory', { clientId, name, loggedCount: sessions.length })}
                         >
-                          <Ionicons name="time-outline" size={16} color={COLORS.text} />
+                          <Ionicons name="time-outline" size={16} color={COLORS.textBright} />
                           <Text style={styles.viewHistoryBtnText}>View Purchases</Text>
                         </TouchableOpacity>
                       </View>
@@ -463,21 +463,21 @@ export default function ClientDetailScreen({ route, navigation }) {
           style={styles.toolbarItem}
           onPress={() => navigation.navigate('PurchaseHistory', { clientId, name, loggedCount: sessions.length })}
         >
-          <Ionicons name="cash-outline" size={24} color={COLORS.text} />
+          <Ionicons name="cash-outline" size={24} color={COLORS.textBright} />
           <Text style={styles.toolbarLabel} numberOfLines={1}>Log Purchase</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.toolbarItem}
           onPress={() => navigation.navigate('Progress', { clientId, name })}
         >
-          <Ionicons name="stats-chart-outline" size={24} color={COLORS.text} />
+          <Ionicons name="stats-chart-outline" size={24} color={COLORS.textBright} />
           <Text style={styles.toolbarLabel} numberOfLines={1}>Progress</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.toolbarItem}
           onPress={() => navigation.navigate('ClientProfile', { clientId, name })}
         >
-          <Ionicons name="person-outline" size={24} color={COLORS.text} />
+          <Ionicons name="person-outline" size={24} color={COLORS.textBright} />
           <Text style={styles.toolbarLabel} numberOfLines={1}>Profile</Text>
         </TouchableOpacity>
       </View>
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
   // Client info card
   infoCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
@@ -650,9 +650,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 14,
   },
-  avatarText: { color: '#000', fontWeight: '800', fontSize: 20, fontFamily: FONTS.extraBold },
-  infoName: { color: COLORS.text, fontWeight: '700', fontSize: 18, fontFamily: FONTS.bold },
-  infoDetail: { color: COLORS.textMuted, fontSize: 14, marginTop: 2, fontFamily: FONTS.regular },
+  avatarText: { color: '#000', fontWeight: '800', fontSize: TYPE.title, fontFamily: FONTS.extraBold },
+  infoName: { color: COLORS.textBright, fontWeight: '700', fontSize: TYPE.heading, fontFamily: FONTS.bold },
+  infoDetail: { color: COLORS.textMuted, fontSize: TYPE.body, marginTop: 2, fontFamily: FONTS.regular },
   editBtn: {
     backgroundColor: COLORS.background,
     borderRadius: 8,
@@ -661,7 +661,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  editBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 13, fontFamily: FONTS.bold },
+  editBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: TYPE.label, fontFamily: FONTS.bold },
   bodyStatsRow: {
     flexDirection: 'row',
     marginTop: 12,
@@ -671,18 +671,18 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   bodyStat: { flex: 1 },
-  bodyStatLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
-  bodyStatValue: { color: COLORS.text, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold },
-  bodyStatSub: { color: COLORS.textMuted, fontSize: 11, marginTop: 2, fontFamily: FONTS.regular },
+  bodyStatLabel: { color: COLORS.textMuted, fontSize: TYPE.caption, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
+  bodyStatValue: { color: COLORS.textBright, fontSize: TYPE.heading, fontWeight: '700', fontFamily: FONTS.bold },
+  bodyStatSub: { color: COLORS.textMuted, fontSize: TYPE.caption, marginTop: 2, fontFamily: FONTS.regular },
   noteBox: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderColor: COLORS.border,
   },
-  noteLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
-  noteText: { color: COLORS.text, fontSize: 14, lineHeight: 20, fontFamily: FONTS.regular },
-  sessionCount: { color: COLORS.textMuted, fontSize: 12, marginTop: 12, fontFamily: FONTS.regular },
+  noteLabel: { color: COLORS.textMuted, fontSize: TYPE.caption, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
+  noteText: { color: COLORS.textBright, fontSize: TYPE.body, lineHeight: 20, fontFamily: FONTS.regular },
+  sessionCount: { color: COLORS.textMuted, fontSize: TYPE.label, marginTop: 12, fontFamily: FONTS.regular },
   sessionsBox: {
     marginTop: 12,
     paddingTop: 12,
@@ -706,7 +706,7 @@ const styles = StyleSheet.create({
   sessionsEditBtnText: {
     color: COLORS.accent,
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.bold,
   },
   sessionsStatsRow: {
@@ -724,14 +724,14 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   sessionsStatValue: {
-    color: COLORS.text,
-    fontSize: 20,
+    color: COLORS.textBright,
+    fontSize: TYPE.title,
     fontWeight: '800',
     fontFamily: FONTS.extraBold,
   },
   sessionsStatLabel: {
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -757,7 +757,7 @@ const styles = StyleSheet.create({
   },
   logPurchaseBtnText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.bold,
   },
   viewHistoryBtn: {
@@ -773,8 +773,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   viewHistoryBtnText: {
-    color: COLORS.text,
-    fontSize: 13,
+    color: COLORS.textBright,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   historyModalContent: {
@@ -793,13 +793,13 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   purchaseDate: {
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   purchaseMeta: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     marginTop: 3,
     fontFamily: FONTS.regular,
   },
@@ -831,7 +831,7 @@ const styles = StyleSheet.create({
   },
   notifyBtnText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   sessionsModalContent: {
@@ -843,7 +843,7 @@ const styles = StyleSheet.create({
   },
   sessionsHint: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     marginBottom: 16,
     marginTop: -4,
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: 'center',
   },
-  primaryBtnText: { color: '#000', fontWeight: '800', fontSize: 15, fontFamily: FONTS.extraBold },
+  primaryBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.body, fontFamily: FONTS.extraBold },
   secondaryBtn: {
     flex: 1,
     backgroundColor: COLORS.card,
@@ -868,11 +868,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  secondaryBtnText: { color: COLORS.text, fontWeight: '600', fontSize: 15, fontFamily: FONTS.semiBold },
+  secondaryBtnText: { color: COLORS.textBright, fontWeight: '600', fontSize: TYPE.body, fontFamily: FONTS.semiBold },
 
   sectionLabel: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -890,8 +890,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  date: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
-  meta: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontFamily: FONTS.regular },
+  date: { color: COLORS.textBright, fontWeight: '600', fontSize: TYPE.body, fontFamily: FONTS.semiBold },
+  meta: { color: COLORS.textMuted, fontSize: TYPE.label, marginTop: 3, fontFamily: FONTS.regular },
   deleteBtn: {
     position: 'absolute',
     top: 8,
@@ -900,14 +900,14 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.semiBold,
   },
   empty: {
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 48,
-    fontSize: 15,
+    fontSize: TYPE.body,
     lineHeight: 24,
     fontFamily: FONTS.regular,
   },
@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
   },
   dateToText: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     alignSelf: 'center',
   },
@@ -929,10 +929,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: 10,
     padding: 12,
-    color: COLORS.text,
+    color: COLORS.textBright,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
   },
   dateSearchActions: {
@@ -949,7 +949,7 @@ const styles = StyleSheet.create({
   searchBtnText: {
     color: '#000',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.bold,
   },
   clearBtn: {
@@ -962,21 +962,21 @@ const styles = StyleSheet.create({
   clearBtnText: {
     color: COLORS.textMuted,
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   filterInfo: {
     color: COLORS.accent,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginBottom: 12,
   },
-  dateInputText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.regular },
-  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
+  dateInputText: { color: COLORS.textBright, fontSize: TYPE.label, fontFamily: FONTS.regular },
+  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
   pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  pickerContainer: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: '90%' },
+  pickerContainer: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 16, width: '90%' },
   pickerDone: { alignItems: 'center', padding: 12, marginTop: 8 },
-  pickerDoneText: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
+  pickerDoneText: { color: COLORS.accent, fontSize: TYPE.body, fontWeight: '700', fontFamily: FONTS.bold },
 
   // Pagination
   pagination: {
@@ -997,8 +997,8 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   pageBtnText: {
-    color: COLORS.text,
-    fontSize: 13,
+    color: COLORS.textBright,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   pageBtnTextDisabled: {
@@ -1012,13 +1012,13 @@ const styles = StyleSheet.create({
   },
   currentBtnText: {
     color: '#000',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontWeight: '700',
     fontFamily: FONTS.bold,
   },
   pageInfo: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
   },
 
@@ -1032,22 +1032,22 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: '700', fontFamily: FONTS.bold },
+  modalTitle: { color: COLORS.textBright, fontSize: TYPE.title, fontWeight: '700', fontFamily: FONTS.bold },
   closeBtn: { padding: 4 },
-  closeBtnText: { color: COLORS.textMuted, fontSize: 20, fontWeight: '600', fontFamily: FONTS.semiBold },
+  closeBtnText: { color: COLORS.textMuted, fontSize: TYPE.title, fontWeight: '600', fontFamily: FONTS.semiBold },
   input: {
     backgroundColor: COLORS.background,
     borderRadius: 10,
     padding: 14,
-    color: COLORS.text,
+    color: COLORS.textBright,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
-  fieldLabel: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
-  lastUpdated: { color: COLORS.accent, fontSize: 11, fontFamily: FONTS.regular, marginBottom: 6, marginLeft: 4 },
+  fieldLabel: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
+  lastUpdated: { color: COLORS.accent, fontSize: TYPE.caption, fontFamily: FONTS.regular, marginBottom: 6, marginLeft: 4 },
   nameRow: { flexDirection: 'row', gap: 10 },
   noteInput: { height: 80, paddingTop: 14 },
   modalBtn: {
@@ -1057,7 +1057,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  modalBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  modalBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.heading, fontFamily: FONTS.extraBold },
 
   // Assign Workout
   assignBtn: {
@@ -1074,7 +1074,7 @@ const styles = StyleSheet.create({
   },
   assignBtnText: {
     color: COLORS.accent,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   assignBtnDisabled: {
@@ -1087,7 +1087,7 @@ const styles = StyleSheet.create({
   },
   assignHint: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     textAlign: 'center',
     marginBottom: 28,
@@ -1131,10 +1131,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: COLORS.border,
   },
-  suggestionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular },
+  suggestionText: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.regular },
   suggestionBadge: {
     color: COLORS.accent,
-    fontSize: 10,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -1148,7 +1148,7 @@ const styles = StyleSheet.create({
   },
   assignSetLabel: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
     width: 36,
   },
@@ -1156,8 +1156,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: 8,
     padding: 10,
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -1166,7 +1166,7 @@ const styles = StyleSheet.create({
   },
   assignSetX: {
     color: COLORS.textMuted,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
   assignAddSet: {
@@ -1175,7 +1175,7 @@ const styles = StyleSheet.create({
   },
   assignAddSetText: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   assignAddEx: {
@@ -1188,7 +1188,7 @@ const styles = StyleSheet.create({
   },
   assignAddExText: {
     color: COLORS.accent,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
 
@@ -1203,7 +1203,7 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     color: COLORS.accent,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
 
@@ -1224,8 +1224,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   toolbarLabel: {
-    color: COLORS.text,
-    fontSize: 11,
+    color: COLORS.textBright,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.semiBold,
   },
   toolbarLabelPrimary: {

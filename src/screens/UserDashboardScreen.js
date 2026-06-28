@@ -11,7 +11,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited } from '../utils';
 import { showNoAccess, handledNoAccess } from '../access';
 import { isStepsAvailable, requestStepAccess, getTodaySteps, getWeeklySteps } from '../health';
@@ -904,9 +904,9 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   greeting: {
-    fontSize: 17,
+    fontSize: TYPE.heading,
     fontFamily: FONTS.bold,
-    color: COLORS.text,
+    color: COLORS.textBright,
   },
   statRow: {
     flexDirection: 'row',
@@ -916,7 +916,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 18,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -931,21 +931,22 @@ const styles = StyleSheet.create({
   },
   statCount: {
     color: COLORS.accent,
-    fontSize: 36,
+    fontSize: TYPE.display,
     fontWeight: '800',
     fontFamily: FONTS.extraBold,
   },
   statGoalTotal: {
     color: COLORS.textMuted,
-    fontSize: 22,
+    fontSize: TYPE.title,
     fontFamily: FONTS.bold,
   },
   statLabel: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
     marginTop: 4,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   progressTrack: {
     width: '100%',
@@ -966,7 +967,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 18,
     marginBottom: 20,
     borderWidth: 1,
@@ -983,27 +984,28 @@ const styles = StyleSheet.create({
   },
   stepsCount: {
     color: COLORS.accent,
-    fontSize: 26,
+    fontSize: TYPE.display,
     fontWeight: '800',
     fontFamily: FONTS.extraBold,
   },
   stepsLabel: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.semiBold,
     marginTop: 2,
+    letterSpacing: 0.3,
   },
   stepsWeek: {
     alignItems: 'flex-end',
   },
   stepsWeekCount: {
-    color: COLORS.text,
-    fontSize: 15,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.bold,
   },
   stepsWeekLabel: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginTop: 2,
   },
@@ -1011,7 +1013,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
@@ -1020,8 +1022,8 @@ const styles = StyleSheet.create({
   },
   stepsConnectText: {
     flex: 1,
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   seeAllBtn: {
@@ -1033,7 +1035,7 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   fab: {
@@ -1042,11 +1044,11 @@ const styles = StyleSheet.create({
     right: 24,
     left: 24,
     backgroundColor: COLORS.accent,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 17,
     alignItems: 'center',
   },
-  fabText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  fabText: { color: '#000', fontWeight: '800', fontSize: TYPE.body, fontFamily: FONTS.extraBold },
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1058,19 +1060,19 @@ const styles = StyleSheet.create({
   },
   pickerRowText: {
     flex: 1,
-    color: COLORS.text,
-    fontSize: 15,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   pickerRowSub: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginTop: 2,
   },
   pickerSectionLabel: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -1082,7 +1084,7 @@ const styles = StyleSheet.create({
   // Upcoming
   upcomingTitle: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -1093,7 +1095,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.card,
-    borderRadius: 11,
+    borderRadius: RADIUS.md,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
@@ -1107,20 +1109,20 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   upcomingDay: {
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontWeight: '600',
     fontFamily: FONTS.semiBold,
   },
   upcomingLabel: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginTop: 2,
   },
   upcomingEmpty: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     textAlign: 'center',
     paddingVertical: 16,
@@ -1137,12 +1139,12 @@ const styles = StyleSheet.create({
   },
   profileLabel: {
     color: COLORS.textMuted,
-    fontSize: 14,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
   },
   profileValue: {
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   profileValueCol: {
@@ -1150,7 +1152,7 @@ const styles = StyleSheet.create({
   },
   profileSub: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginTop: 2,
   },
@@ -1163,7 +1165,7 @@ const styles = StyleSheet.create({
   },
   centerModal: {
     backgroundColor: COLORS.card,
-    borderRadius: 16,
+    borderRadius: RADIUS.md,
     padding: 24,
     width: '85%',
     maxHeight: '80%',
@@ -1178,43 +1180,43 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: '700', fontFamily: FONTS.bold },
+  modalTitle: { color: COLORS.textBright, fontSize: TYPE.title, fontWeight: '700', fontFamily: FONTS.bold },
   closeBtn: { padding: 4 },
   closeBtnText: { color: COLORS.textMuted, fontSize: 20, fontWeight: '600', fontFamily: FONTS.semiBold },
   input: {
     backgroundColor: COLORS.background,
-    borderRadius: 10,
+    borderRadius: RADIUS.sm,
     padding: 14,
-    color: COLORS.text,
+    color: COLORS.textBright,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 10,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
-  fieldLabel: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
-  lastUpdated: { color: COLORS.accent, fontSize: 11, fontFamily: FONTS.regular, marginBottom: 6, marginLeft: 4 },
+  fieldLabel: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
+  lastUpdated: { color: COLORS.accent, fontSize: TYPE.caption, fontFamily: FONTS.regular, marginBottom: 6, marginLeft: 4 },
   nameRow: { flexDirection: 'row', gap: 10 },
   sexRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   sexBtn: {
     flex: 1,
     borderColor: COLORS.border,
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: RADIUS.sm,
     padding: 14,
     alignItems: 'center',
   },
   sexBtnActive: { borderColor: COLORS.accent, backgroundColor: COLORS.accent + '1A' },
-  sexBtnTxt: { color: COLORS.textMuted, fontSize: 15, fontFamily: FONTS.semiBold },
+  sexBtnTxt: { color: COLORS.textMuted, fontSize: TYPE.body, fontFamily: FONTS.semiBold },
   sexBtnTxtActive: { color: COLORS.accent },
   modalBtn: {
     backgroundColor: COLORS.accent,
-    borderRadius: 12,
+    borderRadius: RADIUS.sm,
     padding: 16,
     alignItems: 'center',
     marginTop: 4,
   },
-  modalBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  modalBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.body, fontFamily: FONTS.extraBold },
 
   // Settings
   settingsItem: {
@@ -1223,20 +1225,20 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     marginBottom: 12,
   },
-  settingsLabel: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.regular, marginBottom: 4 },
-  settingsValue: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.semiBold },
+  settingsLabel: { color: COLORS.textMuted, fontSize: TYPE.caption, fontFamily: FONTS.regular, marginBottom: 4 },
+  settingsValue: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.semiBold },
   settingsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.background,
-    borderRadius: 10,
+    borderRadius: RADIUS.sm,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
     gap: 10,
   },
-  settingsBtnText: { flex: 1, color: COLORS.text, fontSize: 14, fontFamily: FONTS.semiBold },
+  settingsBtnText: { flex: 1, color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.semiBold },
   settingsBack: { alignItems: 'center', padding: 12, marginTop: 4 },
-  settingsBackText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular },
+  settingsBackText: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
 });

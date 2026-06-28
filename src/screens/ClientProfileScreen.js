@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited } from '../utils';
 import { handledNoAccess } from '../access';
 
@@ -435,11 +435,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
   content: { padding: 20, paddingBottom: 40 },
-  empty: { color: COLORS.textMuted, fontSize: 15, fontFamily: FONTS.regular },
+  empty: { color: COLORS.textMuted, fontSize: TYPE.body, fontFamily: FONTS.regular },
 
   headerCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 20,
     alignItems: 'center',
     borderWidth: 1,
@@ -455,9 +455,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  avatarText: { color: '#000', fontWeight: '800', fontSize: 28, fontFamily: FONTS.extraBold },
-  name: { color: COLORS.text, fontWeight: '700', fontSize: 22, fontFamily: FONTS.bold },
-  subtitle: { color: COLORS.textMuted, fontSize: 14, marginTop: 4, fontFamily: FONTS.regular },
+  avatarText: { color: '#000', fontWeight: '800', fontSize: TYPE.display, fontFamily: FONTS.extraBold },
+  name: { color: COLORS.textBright, fontWeight: '700', fontSize: TYPE.title, fontFamily: FONTS.bold },
+  subtitle: { color: COLORS.textMuted, fontSize: TYPE.body, marginTop: 4, fontFamily: FONTS.regular },
   editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -470,11 +470,11 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent + '40',
     backgroundColor: COLORS.accent + '12',
   },
-  editBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 14, fontFamily: FONTS.bold },
+  editBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: TYPE.body, fontFamily: FONTS.bold },
 
   sectionLabel: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -496,10 +496,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 4,
   },
-  sectionEditText: { color: COLORS.accent, fontWeight: '700', fontSize: 13, fontFamily: FONTS.bold },
+  sectionEditText: { color: COLORS.accent, fontWeight: '700', fontSize: TYPE.label, fontFamily: FONTS.bold },
   infoCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -511,17 +511,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
   },
-  infoRowLabel: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular },
-  infoRowValue: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.semiBold, flexShrink: 1, textAlign: 'right' },
+  infoRowLabel: { color: COLORS.textMuted, fontSize: TYPE.body, fontFamily: FONTS.regular },
+  infoRowValue: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.semiBold, flexShrink: 1, textAlign: 'right' },
   infoRowMuted: { color: COLORS.textMuted, fontFamily: FONTS.regular },
   divider: { height: 1, backgroundColor: COLORS.border, marginVertical: 12 },
 
   bodyStatsRow: { flexDirection: 'row', gap: 16 },
   bodyStat: { flex: 1 },
-  bodyStatLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
-  bodyStatValue: { color: COLORS.text, fontSize: 18, fontWeight: '700', fontFamily: FONTS.bold },
-  bodyStatSub: { color: COLORS.textMuted, fontSize: 11, marginTop: 2, fontFamily: FONTS.regular },
-  noteText: { color: COLORS.text, fontSize: 14, lineHeight: 20, fontFamily: FONTS.regular },
+  bodyStatLabel: { color: COLORS.textMuted, fontSize: TYPE.caption, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, fontFamily: FONTS.bold },
+  bodyStatValue: { color: COLORS.textBright, fontSize: TYPE.heading, fontWeight: '700', fontFamily: FONTS.bold },
+  bodyStatSub: { color: COLORS.textMuted, fontSize: TYPE.caption, marginTop: 2, fontFamily: FONTS.regular },
+  noteText: { color: COLORS.textBright, fontSize: TYPE.body, lineHeight: 20, fontFamily: FONTS.regular },
 
   // Edit modal
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
@@ -533,22 +533,22 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: '700', fontFamily: FONTS.bold },
+  modalTitle: { color: COLORS.textBright, fontSize: TYPE.title, fontWeight: '700', fontFamily: FONTS.bold },
   closeBtn: { padding: 4 },
-  closeBtnText: { color: COLORS.textMuted, fontSize: 20, fontWeight: '600', fontFamily: FONTS.semiBold },
+  closeBtnText: { color: COLORS.textMuted, fontSize: TYPE.title, fontWeight: '600', fontFamily: FONTS.semiBold },
   input: {
     backgroundColor: COLORS.background,
     borderRadius: 10,
     padding: 14,
-    color: COLORS.text,
+    color: COLORS.textBright,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
-  fieldLabel: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
-  lastUpdated: { color: COLORS.accent, fontSize: 11, fontFamily: FONTS.regular, marginBottom: 6, marginLeft: 4 },
+  fieldLabel: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
+  lastUpdated: { color: COLORS.accent, fontSize: TYPE.caption, fontFamily: FONTS.regular, marginBottom: 6, marginLeft: 4 },
   nameRow: { flexDirection: 'row', gap: 10 },
   noteInput: { height: 80, paddingTop: 14 },
   modalBtn: {
@@ -558,5 +558,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 4,
   },
-  modalBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  modalBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.heading, fontFamily: FONTS.extraBold },
 });

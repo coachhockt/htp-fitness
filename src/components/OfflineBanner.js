@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 
 export default function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(false);
@@ -35,5 +35,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 999,
   },
-  text: { color: '#fff', fontSize: 13, fontFamily: FONTS.semiBold },
+  text: { color: '#fff', fontSize: TYPE.label, fontFamily: FONTS.semiBold },
 });

@@ -7,7 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, getSavedEmail } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 
 export default function AuthScreen() {
   const [email, setEmail] = useState('');
@@ -364,8 +364,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
-    color: COLORS.text,
-    fontSize: 16,
+    color: COLORS.textBright,
+    fontSize: TYPE.heading,
     marginBottom: 12,
     fontFamily: FONTS.regular,
   },
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#000',
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: TYPE.heading,
     fontFamily: FONTS.extraBold,
   },
   bottomBar: {
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   suggestionRow: {
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   },
   suggestionText: {
     color: '#000',
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   reqRow: {
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
   },
   reqText: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginBottom: 2,
   },
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   },
   charCount: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
   },
   charCountMax: {
@@ -470,12 +470,12 @@ const styles = StyleSheet.create({
   },
   rememberText: {
     color: COLORS.textMuted,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
   forgotText: {
     color: COLORS.accent,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
     textAlign: 'center',
     marginBottom: 16,
@@ -498,8 +498,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   forgotTitle: {
-    color: COLORS.text,
-    fontSize: 20,
+    color: COLORS.textBright,
+    fontSize: TYPE.title,
     fontWeight: '700',
     fontFamily: FONTS.bold,
   },
@@ -508,13 +508,13 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     color: COLORS.textMuted,
-    fontSize: 20,
+    fontSize: TYPE.title,
     fontWeight: '600',
     fontFamily: FONTS.semiBold,
   },
   forgotDesc: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     marginBottom: 16,
     lineHeight: 20,

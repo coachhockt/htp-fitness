@@ -8,7 +8,7 @@ import {
   collection, query, where, onSnapshot, deleteDoc, doc, orderBy,
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { handledNoAccess } from '../access';
 import { SAMPLE_WORKOUTS } from '../sampleWorkouts';
 
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: COLORS.textMuted,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.semiBold,
   },
   tabTextActive: {
@@ -203,27 +203,27 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   cardTitle: {
-    color: COLORS.text,
-    fontSize: 16,
+    color: COLORS.textBright,
+    fontSize: TYPE.heading,
     fontFamily: FONTS.bold,
     marginBottom: 4,
   },
   cardMeta: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     marginBottom: 2,
   },
   cardNote: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     fontStyle: 'italic',
     marginTop: 4,
   },
   cardDate: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginTop: 4,
   },
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   },
   startBtnText: {
     color: '#000',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.bold,
   },
   empty: {
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: COLORS.textMuted,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
     textAlign: 'center',
     marginTop: 16,

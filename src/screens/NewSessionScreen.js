@@ -7,7 +7,7 @@ import {
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { compute1RMs, estimate1RM, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
@@ -152,6 +152,7 @@ export default function NewSessionScreen({ route, navigation }) {
   const [exerciseMenu, setExerciseMenu] = useState(null); // { exIdx }
   const [supersetPicker, setSupersetPicker] = useState(null); // { exIdx }
   const [noteModal, setNoteModal] = useState(null); // { exIdx }
+  const [lastSetsModal, setLastSetsModal] = useState(null); // { name, date, sets, unit }
   const [noteInput, setNoteInput] = useState('');
   const [startTime] = useState(() => Date.now());
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -240,6 +241,7 @@ export default function NewSessionScreen({ route, navigation }) {
                 weight: h.weight,
                 reps: h.reps,
                 unit: ex.unit || 'reps',
+                sets: ex.sets || [],
               };
             }
           }
@@ -366,9 +368,10 @@ export default function NewSessionScreen({ route, navigation }) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerLeft: () => (
-        <TouchableOpacity onPress={confirmGoBack} style={{ paddingRight: 16 }}>
-          <Text style={{ color: COLORS.text, fontSize: 17 }}>‹ {name}</Text>
+      headerLeft: () => null,
+      headerRight: () => (
+        <TouchableOpacity onPress={confirmGoBack} style={{ paddingHorizontal: 4 }} disabled={saving}>
+          <Text style={{ color: COLORS.accent, fontSize: TYPE.heading, fontFamily: FONTS.bold }}>End Session</Text>
         </TouchableOpacity>
       ),
     });
@@ -668,7 +671,23 @@ export default function NewSessionScreen({ route, navigation }) {
 
               return (
                 <View style={styles.statsRow}>
-                  <Text style={styles.statLast} numberOfLines={1}>{lastStr}</Text>
+                  {last ? (
+                    <TouchableOpacity
+                      style={styles.statLastBtn}
+                      activeOpacity={0.6}
+                      onPress={() => setLastSetsModal({
+                        name: ex.name,
+                        date: last.date,
+                        sets: last.sets || [],
+                        unit: last.unit,
+                      })}
+                    >
+                      <Text style={styles.statLast} numberOfLines={1}>{lastStr}</Text>
+                      <Ionicons name="chevron-forward" size={12} color={COLORS.textMuted} />
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.statLastBtn} />
+                  )}
                   <Text style={styles.statBest} numberOfLines={1}>{bestStr}</Text>
                 </View>
               );
@@ -935,6 +954,47 @@ export default function NewSessionScreen({ route, navigation }) {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      <Modal visible={lastSetsModal !== null} transparent animationType="fade" onRequestClose={() => setLastSetsModal(null)}>
+        <Pressable style={styles.noteOverlay} onPress={() => setLastSetsModal(null)}>
+          <Pressable style={styles.noteModal} onPress={() => {}}>
+            <Text style={styles.lastModalHeader}>{titleCaseExercise(lastSetsModal?.name || '')}</Text>
+            {lastSetsModal?.date ? (
+              <Text style={styles.lastModalDate}>
+                {lastSetsModal.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+              </Text>
+            ) : null}
+            <View style={styles.lastHeaderDivider} />
+            <ScrollView style={{ maxHeight: 320 }}>
+              {(lastSetsModal?.sets || []).map((set, i) => {
+                const isSeconds = lastSetsModal.unit === 'seconds';
+                const w = set.weight == null || set.weight === 0 ? 'B.W.' : set.weight;
+                const r = isSeconds ? `${set.reps} sec` : `${set.reps} reps`;
+                const tag = set.type === 'dropset' ? 'Drop set' : set.type === 'superset' ? 'Superset' : null;
+                return (
+                  <View key={i} style={styles.lastSetRow}>
+                    <View style={styles.lastSetNumBadge}>
+                      <Text style={styles.lastSetNum}>{i + 1}</Text>
+                    </View>
+                    <Text style={styles.lastSetText}>{w} × {r}</Text>
+                    {tag ? (
+                      <View style={styles.lastSetTagPill}>
+                        <Text style={styles.lastSetTag}>{tag}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+              {(!lastSetsModal?.sets || lastSetsModal.sets.length === 0) && (
+                <Text style={styles.pickerEmpty}>No sets recorded.</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={styles.lastCloseBtn} onPress={() => setLastSetsModal(null)}>
+              <Text style={styles.lastCloseText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -943,7 +1003,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, padding: 20 },
   clientLabel: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontWeight: '700',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
@@ -952,7 +1012,7 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
@@ -978,10 +1038,10 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   exNameBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  exName: { color: COLORS.text, fontWeight: '700', fontSize: 17, fontFamily: FONTS.bold },
+  exName: { color: COLORS.textBright, fontWeight: '700', fontSize: TYPE.heading, fontFamily: FONTS.bold },
   exNote: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontStyle: 'italic',
     marginTop: 4,
     fontFamily: FONTS.regular,
@@ -992,16 +1052,93 @@ const styles = StyleSheet.create({
     marginTop: 8,
     gap: 8,
   },
-  statLast: {
+  statLastBtn: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  statLast: {
+    flexShrink: 1,
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
+  },
+  lastModalHeader: {
+    color: COLORS.textBright,
+    fontSize: TYPE.heading,
+    fontFamily: FONTS.bold,
+    textAlign: 'center',
+  },
+  lastModalDate: {
+    color: COLORS.textMuted,
+    fontSize: TYPE.label,
+    fontFamily: FONTS.semiBold,
+    textAlign: 'center',
+    marginTop: 3,
+  },
+  lastHeaderDivider: {
+    height: 2,
+    backgroundColor: COLORS.accent,
+    opacity: 0.5,
+    borderRadius: 1,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  lastSetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  lastSetNumBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.accent + '1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lastSetNum: {
+    color: COLORS.accent,
+    fontSize: TYPE.label,
+    fontFamily: FONTS.bold,
+  },
+  lastSetText: {
+    flex: 1,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
+    fontFamily: FONTS.semiBold,
+  },
+  lastSetTagPill: {
+    backgroundColor: COLORS.accent + '1A',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  lastSetTag: {
+    color: COLORS.accent,
+    fontSize: TYPE.caption,
+    fontFamily: FONTS.semiBold,
+  },
+  lastCloseBtn: {
+    marginTop: 16,
+    paddingVertical: 13,
+    borderRadius: 10,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+  },
+  lastCloseText: {
+    color: '#000',
+    fontSize: TYPE.body,
+    fontFamily: FONTS.bold,
   },
   statBest: {
     flex: 1,
     color: COLORS.accent,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
     textAlign: 'right',
   },
@@ -1015,16 +1152,16 @@ const styles = StyleSheet.create({
   },
   supersetBadgeText: {
     color: SET_COLORS.superset,
-    fontSize: 9,
+    fontSize: TYPE.caption,
     fontWeight: '800',
     fontFamily: FONTS.extraBold,
     letterSpacing: 0.5,
   },
-  removeEx: { color: COLORS.danger, fontSize: 13, fontFamily: FONTS.regular },
+  removeEx: { color: COLORS.danger, fontSize: TYPE.label, fontFamily: FONTS.regular },
   colHeaders: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
   colHeader: {
     color: COLORS.textMuted,
-    fontSize: 9,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     letterSpacing: 1,
     textAlign: 'center',
@@ -1033,18 +1170,18 @@ const styles = StyleSheet.create({
   setRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, paddingVertical: 2 },
   setNumBtn: { width: 32, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   dropsetLine: { position: 'absolute', top: -12, width: 2, height: 12, backgroundColor: SET_COLORS.dropset, borderRadius: 1 },
-  setNum: { color: COLORS.textMuted, textAlign: 'center', fontSize: 13, fontFamily: FONTS.regular },
+  setNum: { color: COLORS.textMuted, textAlign: 'center', fontSize: TYPE.label, fontFamily: FONTS.regular },
   badge: { borderRadius: 6, paddingHorizontal: 4, paddingVertical: 2, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontSize: 9, fontWeight: '800', fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
+  badgeText: { fontSize: TYPE.caption, fontWeight: '800', fontFamily: FONTS.extraBold, letterSpacing: 0.5 },
   setInput: {
     flex: 1,
     backgroundColor: COLORS.background,
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 6,
-    color: COLORS.text,
+    color: COLORS.textBright,
     textAlign: 'center',
-    fontSize: 16,
+    fontSize: TYPE.heading,
     borderWidth: 1,
     borderColor: COLORS.border,
     fontFamily: FONTS.regular,
@@ -1055,7 +1192,7 @@ const styles = StyleSheet.create({
   },
   setInputLockedText: {
     color: COLORS.accent,
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontWeight: '700',
     letterSpacing: 0.5,
     fontFamily: FONTS.bold,
@@ -1074,7 +1211,7 @@ const styles = StyleSheet.create({
   },
   bwBtnText: {
     color: COLORS.textMuted,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     fontFamily: FONTS.bold,
     letterSpacing: 0.5,
@@ -1082,19 +1219,19 @@ const styles = StyleSheet.create({
   bwBtnTextActive: {
     color: COLORS.accent,
   },
-  x: { color: COLORS.textMuted, marginHorizontal: 8, fontSize: 16 },
+  x: { color: COLORS.textMuted, marginHorizontal: 8, fontSize: TYPE.heading },
   deleteSetBtn: { width: 36, alignItems: 'center', paddingVertical: 4 },
-  deleteSetText: { color: COLORS.danger, fontSize: 14 },
+  deleteSetText: { color: COLORS.danger, fontSize: TYPE.body },
   addSetBtn: { alignItems: 'center', paddingVertical: 10, marginTop: 2 },
-  addSetText: { color: COLORS.accent, fontWeight: '600', fontSize: 14, fontFamily: FONTS.semiBold },
+  addSetText: { color: COLORS.accent, fontWeight: '600', fontSize: TYPE.body, fontFamily: FONTS.semiBold },
   addExRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
   exInput: {
     flex: 1,
     backgroundColor: COLORS.card,
     borderRadius: 12,
     padding: 14,
-    color: COLORS.text,
-    fontSize: 15,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     borderWidth: 1,
     borderColor: COLORS.border,
     fontFamily: FONTS.regular,
@@ -1107,7 +1244,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.accent,
   },
-  addExBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: 15, fontFamily: FONTS.bold },
+  addExBtnText: { color: COLORS.accent, fontWeight: '700', fontSize: TYPE.body, fontFamily: FONTS.bold },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1125,15 +1262,15 @@ const styles = StyleSheet.create({
   },
   clockLabel: {
     color: COLORS.textMuted,
-    fontSize: 9,
+    fontSize: TYPE.caption,
     fontWeight: '800',
     letterSpacing: 1.5,
     fontFamily: FONTS.extraBold,
     marginBottom: 2,
   },
   clockText: {
-    color: COLORS.text,
-    fontSize: 22,
+    color: COLORS.textBright,
+    fontSize: TYPE.title,
     fontFamily: FONTS.bold,
     fontVariant: ['tabular-nums'],
   },
@@ -1171,8 +1308,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.danger + '22',
   },
   restBtnText: {
-    color: COLORS.text,
-    fontSize: 14,
+    color: COLORS.textBright,
+    fontSize: TYPE.body,
     fontWeight: '700',
     fontFamily: FONTS.bold,
   },
@@ -1188,7 +1325,7 @@ const styles = StyleSheet.create({
   },
   saveBtnSmallText: {
     color: '#000',
-    fontSize: 14,
+    fontSize: TYPE.body,
     fontWeight: '800',
     fontFamily: FONTS.extraBold,
   },
@@ -1210,25 +1347,25 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: COLORS.border,
   },
-  suggestionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular },
+  suggestionText: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.regular },
   suggestionBadge: {
     color: COLORS.accent,
-    fontSize: 10,
+    fontSize: TYPE.caption,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     fontFamily: FONTS.bold,
   },
   tagOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  tagMenu: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: 260, borderWidth: 1, borderColor: COLORS.border },
-  pickerMenu: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: 280, maxHeight: '70%', borderWidth: 1, borderColor: COLORS.border },
-  pickerEmpty: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.regular, textAlign: 'center', paddingVertical: 12 },
-  pickerHint: { color: COLORS.textMuted, fontSize: 11, fontFamily: FONTS.regular, marginLeft: 8 },
-  tagTitle: { color: COLORS.text, fontSize: 14, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 12, textAlign: 'center' },
+  tagMenu: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 16, width: 260, borderWidth: 1, borderColor: COLORS.border },
+  pickerMenu: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 16, width: 280, maxHeight: '70%', borderWidth: 1, borderColor: COLORS.border },
+  pickerEmpty: { color: COLORS.textMuted, fontSize: TYPE.body, fontFamily: FONTS.regular, textAlign: 'center', paddingVertical: 12 },
+  pickerHint: { color: COLORS.textMuted, fontSize: TYPE.caption, fontFamily: FONTS.regular, marginLeft: 8 },
+  tagTitle: { color: COLORS.textBright, fontSize: TYPE.body, fontWeight: '700', fontFamily: FONTS.bold, marginBottom: 12, textAlign: 'center' },
   noteOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   noteModal: {
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 20,
     width: '100%',
     maxWidth: 400,
@@ -1239,11 +1376,11 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     borderRadius: 10,
     padding: 14,
-    color: COLORS.text,
+    color: COLORS.textBright,
     minHeight: 90,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
     marginBottom: 14,
   },
@@ -1256,7 +1393,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     alignItems: 'center',
   },
-  noteCancelText: { color: COLORS.textMuted, fontSize: 14, fontFamily: FONTS.semiBold },
+  noteCancelText: { color: COLORS.textMuted, fontSize: TYPE.body, fontFamily: FONTS.semiBold },
   noteSaveBtn: {
     flex: 1,
     paddingVertical: 12,
@@ -1264,9 +1401,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     alignItems: 'center',
   },
-  noteSaveText: { color: '#000', fontSize: 14, fontFamily: FONTS.bold },
+  noteSaveText: { color: '#000', fontSize: TYPE.body, fontFamily: FONTS.bold },
   tagOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderColor: COLORS.border },
   tagDot: { width: 10, height: 10, borderRadius: 5, marginRight: 12 },
-  tagOptionText: { color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular, flex: 1 },
-  tagCheck: { color: COLORS.accent, fontSize: 16, fontWeight: '700', fontFamily: FONTS.bold },
+  tagOptionText: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.regular, flex: 1 },
+  tagCheck: { color: COLORS.accent, fontSize: TYPE.heading, fontWeight: '700', fontFamily: FONTS.bold },
 });

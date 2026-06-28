@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getSessionsRemaining } from '../utils';
 import { handledNoAccess } from '../access';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -383,7 +383,7 @@ export default function PurchaseHistoryScreen({ route, navigation }) {
               </View>
               <Text style={styles.fieldLabel}>Date</Text>
               <TouchableOpacity style={styles.input} onPress={() => setShowPurchaseDatePicker(true)}>
-                <Text style={{ color: COLORS.text, fontSize: 15, fontFamily: FONTS.regular }}>
+                <Text style={{ color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.regular }}>
                   {purchaseDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </Text>
               </TouchableOpacity>
@@ -459,13 +459,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background },
   list: { padding: 20, paddingBottom: 40 },
-  empty: { color: COLORS.textMuted, textAlign: 'center', marginTop: 48, fontSize: 15, lineHeight: 24, fontFamily: FONTS.regular },
+  empty: { color: COLORS.textMuted, textAlign: 'center', marginTop: 48, fontSize: TYPE.body, lineHeight: 24, fontFamily: FONTS.regular },
 
   // Summary
   summaryCard: {
     flexDirection: 'row',
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: RADIUS.md,
     padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -473,8 +473,8 @@ const styles = StyleSheet.create({
   },
   summaryStat: { flex: 1, alignItems: 'center' },
   summaryDivider: { width: 1, backgroundColor: COLORS.border },
-  summaryValue: { color: COLORS.text, fontSize: 22, fontWeight: '800', fontFamily: FONTS.extraBold },
-  summaryLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 4, fontFamily: FONTS.bold },
+  summaryValue: { color: COLORS.textBright, fontSize: TYPE.title, fontWeight: '800', fontFamily: FONTS.extraBold },
+  summaryLabel: { color: COLORS.textMuted, fontSize: TYPE.caption, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase', marginTop: 4, fontFamily: FONTS.bold },
 
   logBtn: {
     flexDirection: 'row',
@@ -486,34 +486,34 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginBottom: 20,
   },
-  logBtnText: { color: '#000', fontWeight: '800', fontSize: 15, fontFamily: FONTS.extraBold },
+  logBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.body, fontFamily: FONTS.extraBold },
 
   // Date search
   dateSearchRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  dateToText: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular, alignSelf: 'center' },
+  dateToText: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular, alignSelf: 'center' },
   dateInput: {
     flex: 1,
     backgroundColor: COLORS.card,
     borderRadius: 10,
     padding: 12,
-    color: COLORS.text,
+    color: COLORS.textBright,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
   },
   dateSearchActions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   searchBtn: { backgroundColor: COLORS.accent, borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 },
-  searchBtnText: { color: '#000', fontWeight: '700', fontSize: 13, fontFamily: FONTS.bold },
+  searchBtnText: { color: '#000', fontWeight: '700', fontSize: TYPE.label, fontFamily: FONTS.bold },
   clearBtn: { borderColor: COLORS.border, borderWidth: 1, borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 },
-  clearBtnText: { color: COLORS.textMuted, fontWeight: '600', fontSize: 13, fontFamily: FONTS.semiBold },
-  filterInfo: { color: COLORS.accent, fontSize: 11, fontFamily: FONTS.regular, marginBottom: 12 },
-  dateInputText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.regular },
-  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
+  clearBtnText: { color: COLORS.textMuted, fontWeight: '600', fontSize: TYPE.label, fontFamily: FONTS.semiBold },
+  filterInfo: { color: COLORS.accent, fontSize: TYPE.caption, fontFamily: FONTS.regular, marginBottom: 12 },
+  dateInputText: { color: COLORS.textBright, fontSize: TYPE.label, fontFamily: FONTS.regular },
+  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
   pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  pickerContainer: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: '90%' },
+  pickerContainer: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 16, width: '90%' },
   pickerDone: { alignItems: 'center', padding: 12, marginTop: 8 },
-  pickerDoneText: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
+  pickerDoneText: { color: COLORS.accent, fontSize: TYPE.body, fontWeight: '700', fontFamily: FONTS.bold },
 
   // Purchase rows
   purchaseRow: {
@@ -526,8 +526,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  purchaseDate: { color: COLORS.text, fontSize: 14.5, fontFamily: FONTS.semiBold },
-  purchaseMeta: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontFamily: FONTS.regular },
+  purchaseDate: { color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.semiBold },
+  purchaseMeta: { color: COLORS.textMuted, fontSize: TYPE.label, marginTop: 3, fontFamily: FONTS.regular },
   purchaseRowActions: { flexDirection: 'row', alignItems: 'center', gap: 12, marginLeft: 12 },
   purchaseActionBtn: { padding: 4 },
 
@@ -535,22 +535,22 @@ const styles = StyleSheet.create({
   centerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: COLORS.card, borderRadius: 16, padding: 24, width: '100%', maxWidth: 400 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: '700', fontFamily: FONTS.bold },
+  modalTitle: { color: COLORS.textBright, fontSize: TYPE.title, fontWeight: '700', fontFamily: FONTS.bold },
   closeBtn: { padding: 4 },
-  closeBtnText: { color: COLORS.textMuted, fontSize: 20, fontWeight: '600', fontFamily: FONTS.semiBold },
-  fieldLabel: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
+  closeBtnText: { color: COLORS.textMuted, fontSize: TYPE.title, fontWeight: '600', fontFamily: FONTS.semiBold },
+  fieldLabel: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.semiBold, marginBottom: 6, marginLeft: 4 },
   input: {
     backgroundColor: COLORS.background,
     borderRadius: 10,
     padding: 14,
-    color: COLORS.text,
+    color: COLORS.textBright,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 15,
+    fontSize: TYPE.body,
     fontFamily: FONTS.regular,
   },
-  sessionsHint: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.regular, marginBottom: 16, marginTop: -4 },
+  sessionsHint: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular, marginBottom: 16, marginTop: -4 },
   modalBtn: { backgroundColor: COLORS.accent, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 4 },
-  modalBtnText: { color: '#000', fontWeight: '800', fontSize: 16, fontFamily: FONTS.extraBold },
+  modalBtnText: { color: '#000', fontWeight: '800', fontSize: TYPE.heading, fontFamily: FONTS.extraBold },
 });

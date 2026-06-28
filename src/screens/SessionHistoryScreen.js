@@ -7,7 +7,7 @@ import { db } from '../../firebase';
 import {
   collection, query, where, orderBy, onSnapshot, doc, deleteDoc,
 } from 'firebase/firestore';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { handledNoAccess } from '../access';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -289,8 +289,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  date: { color: COLORS.text, fontWeight: '600', fontSize: 14.5, fontFamily: FONTS.semiBold },
-  meta: { color: COLORS.textMuted, fontSize: 12, marginTop: 3, fontFamily: FONTS.regular },
+  date: { color: COLORS.textBright, fontWeight: '600', fontSize: TYPE.body, fontFamily: FONTS.semiBold },
+  meta: { color: COLORS.textMuted, fontSize: TYPE.label, marginTop: 3, fontFamily: FONTS.regular },
   deleteBtn: {
     position: 'absolute',
     top: 8,
@@ -299,14 +299,14 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     color: COLORS.textMuted,
-    fontSize: 10,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.semiBold,
   },
   empty: {
     color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 48,
-    fontSize: 15,
+    fontSize: TYPE.body,
     lineHeight: 24,
     fontFamily: FONTS.regular,
   },
@@ -319,7 +319,7 @@ const styles = StyleSheet.create({
   },
   dateToText: {
     color: COLORS.textMuted,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
     alignSelf: 'center',
   },
@@ -328,10 +328,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderRadius: 10,
     padding: 12,
-    color: COLORS.text,
+    color: COLORS.textBright,
     borderWidth: 1,
     borderColor: COLORS.border,
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
   },
   dateSearchActions: {
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   searchBtnText: {
     color: '#000',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.bold,
   },
   clearBtn: {
@@ -361,21 +361,21 @@ const styles = StyleSheet.create({
   clearBtnText: {
     color: COLORS.textMuted,
     fontWeight: '600',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   filterInfo: {
     color: COLORS.accent,
-    fontSize: 11,
+    fontSize: TYPE.caption,
     fontFamily: FONTS.regular,
     marginBottom: 12,
   },
-  dateInputText: { color: COLORS.text, fontSize: 13, fontFamily: FONTS.regular },
-  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular },
+  dateInputText: { color: COLORS.textBright, fontSize: TYPE.label, fontFamily: FONTS.regular },
+  dateInputPlaceholder: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
   pickerOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-  pickerContainer: { backgroundColor: COLORS.card, borderRadius: 14, padding: 16, width: '90%' },
+  pickerContainer: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 16, width: '90%' },
   pickerDone: { alignItems: 'center', padding: 12, marginTop: 8 },
-  pickerDoneText: { color: COLORS.accent, fontSize: 15, fontWeight: '700', fontFamily: FONTS.bold },
+  pickerDoneText: { color: COLORS.accent, fontSize: TYPE.body, fontWeight: '700', fontFamily: FONTS.bold },
 
   // Pagination
   pagination: {
@@ -396,8 +396,8 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   pageBtnText: {
-    color: COLORS.text,
-    fontSize: 13,
+    color: COLORS.textBright,
+    fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
   },
   pageBtnTextDisabled: {
@@ -411,13 +411,13 @@ const styles = StyleSheet.create({
   },
   currentBtnText: {
     color: '#000',
-    fontSize: 13,
+    fontSize: TYPE.label,
     fontWeight: '700',
     fontFamily: FONTS.bold,
   },
   pageInfo: {
     color: COLORS.textMuted,
-    fontSize: 12,
+    fontSize: TYPE.label,
     fontFamily: FONTS.regular,
   },
 });
