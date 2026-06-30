@@ -153,6 +153,8 @@ export default function NewSessionScreen({ route, navigation }) {
   const [supersetPicker, setSupersetPicker] = useState(null); // { exIdx }
   const [noteModal, setNoteModal] = useState(null); // { exIdx }
   const [lastSetsModal, setLastSetsModal] = useState(null); // { name, date, sets, unit }
+  const [lastSession, setLastSession] = useState(null); // { date, exercises } most recent session
+  const [showLastSession, setShowLastSession] = useState(false);
   const [noteInput, setNoteInput] = useState('');
   const [startTime] = useState(() => Date.now());
   const [elapsedSec, setElapsedSec] = useState(0);
@@ -273,6 +275,7 @@ export default function NewSessionScreen({ route, navigation }) {
       setPastExercises([...names].filter(Boolean).sort());
       setPastBest(best);
       setPastLast(last);
+      setLastSession(sessions[0] || null);
     }
     loadPast();
   }, [clientId]);
@@ -368,14 +371,20 @@ export default function NewSessionScreen({ route, navigation }) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerLeft: () => null,
-      headerRight: () => (
+      headerLeft: () => (
         <TouchableOpacity onPress={confirmGoBack} style={{ paddingHorizontal: 4 }} disabled={saving}>
-          <Text style={{ color: COLORS.accent, fontSize: TYPE.heading, fontFamily: FONTS.bold }}>End Session</Text>
+          <Ionicons name="chevron-back" size={26} color={COLORS.accent} />
         </TouchableOpacity>
       ),
+      headerRight: () => (
+        lastSession ? (
+          <TouchableOpacity onPress={() => setShowLastSession(true)} style={{ paddingHorizontal: 4 }}>
+            <Text style={{ color: COLORS.accent, fontSize: TYPE.heading, fontFamily: FONTS.bold }}>Last Session</Text>
+          </TouchableOpacity>
+        ) : null
+      ),
     });
-  }, [navigation, exercises, saving]);
+  }, [navigation, exercises, saving, lastSession]);
 
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -995,6 +1004,54 @@ export default function NewSessionScreen({ route, navigation }) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <Modal visible={showLastSession} transparent animationType="fade" onRequestClose={() => setShowLastSession(false)}>
+        <Pressable style={styles.noteOverlay} onPress={() => setShowLastSession(false)}>
+          <Pressable style={styles.noteModal} onPress={() => {}}>
+            <Text style={styles.lastModalHeader}>Last Session</Text>
+            {lastSession?.date ? (
+              <Text style={styles.lastModalDate}>
+                {lastSession.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+              </Text>
+            ) : null}
+            <View style={styles.lastHeaderDivider} />
+            <ScrollView style={{ maxHeight: 400 }}>
+              {(lastSession?.exercises || []).map((ex, exIdx) => {
+                const isSeconds = ex.unit === 'seconds';
+                return (
+                  <View key={exIdx} style={styles.lastExBlock}>
+                    <Text style={styles.lastExName}>{titleCaseExercise(ex.name || '')}</Text>
+                    {(ex.sets || []).map((set, i) => {
+                      const w = set.weight == null || set.weight === 0 ? 'B.W.' : set.weight;
+                      const r = isSeconds ? `${set.reps} sec` : `${set.reps} reps`;
+                      const tag = set.type === 'dropset' ? 'Drop set' : set.type === 'superset' ? 'Superset' : null;
+                      return (
+                        <View key={i} style={styles.lastSetRow}>
+                          <View style={styles.lastSetNumBadge}>
+                            <Text style={styles.lastSetNum}>{i + 1}</Text>
+                          </View>
+                          <Text style={styles.lastSetText}>{w} × {r}</Text>
+                          {tag ? (
+                            <View style={styles.lastSetTagPill}>
+                              <Text style={styles.lastSetTag}>{tag}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+              {(!lastSession?.exercises || lastSession.exercises.length === 0) && (
+                <Text style={styles.pickerEmpty}>No previous session found.</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={styles.lastCloseBtn} onPress={() => setShowLastSession(false)}>
+              <Text style={styles.lastCloseText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -1084,6 +1141,16 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     marginTop: 12,
     marginBottom: 4,
+  },
+  lastExBlock: {
+    marginBottom: 8,
+  },
+  lastExName: {
+    color: COLORS.accent,
+    fontSize: TYPE.body,
+    fontFamily: FONTS.bold,
+    marginTop: 10,
+    marginBottom: 2,
   },
   lastSetRow: {
     flexDirection: 'row',
