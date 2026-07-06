@@ -11,6 +11,7 @@ import UserDashboardScreen from '../screens/UserDashboardScreen';
 import ClientsScreen from '../screens/ClientsScreen';
 import ClientDetailScreen from '../screens/ClientDetailScreen';
 import NewSessionScreen from '../screens/NewSessionScreen';
+import AssignWorkoutScreen from '../screens/AssignWorkoutScreen';
 import SessionDetailScreen from '../screens/SessionDetailScreen';
 import ProgressScreen from '../screens/ProgressScreen';
 import AdminScreen from '../screens/AdminScreen';
@@ -69,6 +70,11 @@ export default function AppNavigator() {
               name="NewSession"
               component={NewSessionScreen}
               options={{ title: 'New Session' }}
+            />
+            <Stack.Screen
+              name="AssignWorkout"
+              component={AssignWorkoutScreen}
+              options={{ title: 'Assign Workout' }}
             />
             <Stack.Screen
               name="SessionDetail"

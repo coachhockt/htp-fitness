@@ -23,13 +23,6 @@ export default function ClientDetailScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
   const [client, setClient] = useState(null);
   const [sessions, setSessions] = useState([]);
-  const [assignModal, setAssignModal] = useState(false);
-  const [assignTitle, setAssignTitle] = useState('');
-  const [assignNote, setAssignNote] = useState('');
-  const [assignExercises, setAssignExercises] = useState([{ name: '', sets: [{ weight: '', reps: '' }] }]);
-  const [assignSaving, setAssignSaving] = useState(false);
-  const [assignSuggestionIdx, setAssignSuggestionIdx] = useState(null); // which exercise row is showing suggestions
-  const [assignSuggestions, setAssignSuggestions] = useState([]);
   const [sessionsModal, setSessionsModal] = useState(false);
   const [sessionsInput, setSessionsInput] = useState('');
   const [sessionsSaving, setSessionsSaving] = useState(false);
@@ -231,92 +224,7 @@ export default function ClientDetailScreen({ route, navigation }) {
 
   function openAssignModal() {
     if (!isAppUser) return;
-    setAssignTitle('');
-    setAssignNote('');
-    setAssignExercises([{ name: '', sets: [{ weight: '', reps: '' }] }]);
-    setAssignSuggestionIdx(null);
-    setAssignSuggestions([]);
-    setAssignModal(true);
-  }
-
-  function addAssignExercise() {
-    setAssignExercises(prev => [...prev, { name: '', sets: [{ weight: '', reps: '' }] }]);
-  }
-
-  function removeAssignExercise(idx) {
-    setAssignExercises(prev => prev.filter((_, i) => i !== idx));
-  }
-
-  function updateAssignExName(idx, val) {
-    setAssignExercises(prev => prev.map((ex, i) => i === idx ? { ...ex, name: val } : ex));
-    setAssignSuggestionIdx(idx);
-    setAssignSuggestions(getExerciseSuggestions(val, pastExercises));
-  }
-
-  function applyAssignSuggestion(idx, name) {
-    setAssignExercises(prev => prev.map((ex, i) => i === idx ? { ...ex, name } : ex));
-    setAssignSuggestionIdx(null);
-    setAssignSuggestions([]);
-  }
-
-  function addAssignSet(exIdx) {
-    setAssignExercises(prev => prev.map((ex, i) =>
-      i === exIdx ? { ...ex, sets: [...ex.sets, { weight: '', reps: '' }] } : ex
-    ));
-  }
-
-  function removeAssignSet(exIdx, setIdx) {
-    setAssignExercises(prev => prev.map((ex, i) =>
-      i === exIdx ? { ...ex, sets: ex.sets.filter((_, si) => si !== setIdx) } : ex
-    ));
-  }
-
-  function updateAssignSet(exIdx, setIdx, field, val) {
-    setAssignExercises(prev => prev.map((ex, i) =>
-      i === exIdx ? {
-        ...ex,
-        sets: ex.sets.map((s, si) => si === setIdx ? { ...s, [field]: val } : s),
-      } : ex
-    ));
-  }
-
-  async function saveAssignedWorkout() {
-    if (!assignTitle.trim()) {
-      Alert.alert('Error', 'Please enter a workout title.');
-      return;
-    }
-    const validExercises = assignExercises
-      .filter(ex => ex.name.trim())
-      .map(ex => ({
-        name: titleCaseExercise(ex.name),
-        sets: ex.sets.map(s => ({
-          weight: s.weight ? parseFloat(s.weight) : 0,
-          reps: s.reps ? parseInt(s.reps) : 0,
-        })),
-      }));
-    if (validExercises.length === 0) {
-      Alert.alert('Error', 'Add at least one exercise.');
-      return;
-    }
-    setAssignSaving(true);
-    try {
-      await addDoc(collection(db, 'savedWorkouts'), {
-        clientId,
-        type: 'assigned',
-        sessionId: null,
-        title: assignTitle.trim(),
-        exercises: validExercises,
-        assignedBy: user.uid,
-        createdAt: serverTimestamp(),
-        note: assignNote.trim() || null,
-      });
-      setAssignModal(false);
-      Alert.alert('Success', `Workout assigned to ${name}.`);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-    } finally {
-      setAssignSaving(false);
-    }
+    navigation.navigate('AssignWorkout', { clientId, name });
   }
 
   const name = client?.name || route.params?.name || 'Client';
@@ -518,111 +426,6 @@ export default function ClientDetailScreen({ route, navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Assign Workout Modal */}
-      <Modal visible={assignModal} transparent animationType="fade" onRequestClose={() => setAssignModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <Pressable style={styles.centerBackdrop} onPress={() => setAssignModal(false)}>
-            <Pressable style={styles.assignModalContent} onPress={() => {}}>
-              <ScrollView keyboardShouldPersistTaps="handled">
-                <Text style={styles.modalTitle}>Assign Workout</Text>
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="Workout Title (e.g. Upper Body Day)"
-                  placeholderTextColor={COLORS.textMuted}
-                  value={assignTitle}
-                  onChangeText={setAssignTitle}
-                />
-
-                {assignExercises.map((ex, exIdx) => (
-                  <View key={exIdx} style={styles.assignExBlock}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <TextInput
-                        style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                        placeholder={`Exercise ${exIdx + 1}`}
-                        placeholderTextColor={COLORS.textMuted}
-                        value={ex.name}
-                        onChangeText={(v) => updateAssignExName(exIdx, v)}
-                      />
-                      {assignExercises.length > 1 && (
-                        <TouchableOpacity onPress={() => removeAssignExercise(exIdx)}>
-                          <Ionicons name="close-circle" size={22} color={COLORS.danger} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    {assignSuggestionIdx === exIdx && assignSuggestions.length > 0 && (
-                      <View style={styles.suggestionsBox}>
-                        {assignSuggestions.map((s, i) => (
-                          <TouchableOpacity
-                            key={i}
-                            style={styles.suggestionItem}
-                            onPress={() => applyAssignSuggestion(exIdx, s)}
-                          >
-                            <Text style={styles.suggestionText}>{s}</Text>
-                            {pastExercises.includes(s) && (
-                              <Text style={styles.suggestionBadge}>recent</Text>
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    )}
-                    {ex.sets.map((set, setIdx) => (
-                      <View key={setIdx} style={styles.assignSetRow}>
-                        <Text style={styles.assignSetLabel}>Set {setIdx + 1}</Text>
-                        <TextInput
-                          style={styles.assignSetInput}
-                          placeholder="lbs"
-                          placeholderTextColor={COLORS.textMuted}
-                          value={set.weight}
-                          onChangeText={(v) => updateAssignSet(exIdx, setIdx, 'weight', v)}
-                          keyboardType="decimal-pad"
-                        />
-                        <Text style={styles.assignSetX}>×</Text>
-                        <TextInput
-                          style={styles.assignSetInput}
-                          placeholder="reps"
-                          placeholderTextColor={COLORS.textMuted}
-                          value={set.reps}
-                          onChangeText={(v) => updateAssignSet(exIdx, setIdx, 'reps', v)}
-                          keyboardType="number-pad"
-                        />
-                        {ex.sets.length > 1 && (
-                          <TouchableOpacity onPress={() => removeAssignSet(exIdx, setIdx)}>
-                            <Ionicons name="remove-circle-outline" size={20} color={COLORS.textMuted} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    ))}
-                    <TouchableOpacity onPress={() => addAssignSet(exIdx)} style={styles.assignAddSet}>
-                      <Text style={styles.assignAddSetText}>+ Add Set</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-
-                <TouchableOpacity onPress={addAssignExercise} style={styles.assignAddEx}>
-                  <Ionicons name="add-circle-outline" size={20} color={COLORS.accent} />
-                  <Text style={styles.assignAddExText}>Add Exercise</Text>
-                </TouchableOpacity>
-
-                <TextInput
-                  style={[styles.input, styles.noteInput]}
-                  placeholder="Note (optional)"
-                  placeholderTextColor={COLORS.textMuted}
-                  value={assignNote}
-                  onChangeText={setAssignNote}
-                  multiline
-                  numberOfLines={2}
-                  textAlignVertical="top"
-                />
-
-                <TouchableOpacity style={styles.modalBtn} onPress={saveAssignedWorkout} disabled={assignSaving}>
-                  <Text style={styles.modalBtnText}>{assignSaving ? 'Assigning...' : 'Assign Workout'}</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
     </View>
   );
 }
