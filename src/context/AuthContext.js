@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { db, app } from '../../firebase';
+import { db, app, FIREBASE_API_KEY } from '../../firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 const AuthContext = createContext(null);
-const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+const API_KEY = FIREBASE_API_KEY;
 const ADMIN_EMAIL = process.env.EXPO_PUBLIC_ADMIN_EMAIL;
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60 * 1000; // 30 days
 

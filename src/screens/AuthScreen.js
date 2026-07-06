@@ -7,6 +7,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, getSavedEmail } from '../context/AuthContext';
+import { FIREBASE_API_KEY } from '../../firebase';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 
 export default function AuthScreen() {
@@ -22,7 +23,7 @@ export default function AuthScreen() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const { login, register } = useAuth();
-  const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY;
+  const API_KEY = FIREBASE_API_KEY;
 
   useEffect(() => {
     (async () => {

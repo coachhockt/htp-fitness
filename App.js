@@ -15,6 +15,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/components/SplashScreen';
 import OfflineBanner from './src/components/OfflineBanner';
+import DevBadge from './src/components/DevBadge';
 
 class ErrorBoundary extends React.Component {
   state = { error: null };
@@ -55,6 +56,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <OfflineBanner />
+      <DevBadge />
       <ErrorBoundary>
         <AuthProvider>
           <StatusBar style="light" />

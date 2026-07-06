@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "htp-fitness"
+    "default": "htp-fitness",
+    "prod": "htp-fitness",
+    "dev": "htp-fitness-dev"
   }
 }
