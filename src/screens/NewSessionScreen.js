@@ -2,8 +2,10 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, KeyboardAvoidingView, Platform, BackHandler,
-  Modal, Pressable, Vibration,
+  Modal, Pressable, Vibration, Dimensions,
 } from 'react-native';
+
+const POPUP_SCROLL_MAX = Math.round(Dimensions.get('window').height * 0.6);
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -965,16 +967,21 @@ export default function NewSessionScreen({ route, navigation }) {
       </Modal>
 
       <Modal visible={lastSetsModal !== null} transparent animationType="fade" onRequestClose={() => setLastSetsModal(null)}>
-        <Pressable style={styles.noteOverlay} onPress={() => setLastSetsModal(null)}>
-          <Pressable style={styles.noteModal} onPress={() => {}}>
-            <Text style={styles.lastModalHeader}>{titleCaseExercise(lastSetsModal?.name || '')}</Text>
-            {lastSetsModal?.date ? (
-              <Text style={styles.lastModalDate}>
-                {lastSetsModal.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-              </Text>
-            ) : null}
-            <View style={styles.lastHeaderDivider} />
-            <ScrollView style={{ maxHeight: 320 }}>
+        <View style={styles.noteOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setLastSetsModal(null)} />
+          <View style={styles.noteModal}>
+            <View style={styles.lastGrabHandle} />
+            <TouchableOpacity style={styles.lastCloseX} onPress={() => setLastSetsModal(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={COLORS.textMuted} />
+            </TouchableOpacity>
+            <ScrollView style={{ maxHeight: POPUP_SCROLL_MAX }} nestedScrollEnabled>
+              <Text style={styles.lastModalHeader}>{titleCaseExercise(lastSetsModal?.name || '')}</Text>
+              {lastSetsModal?.date ? (
+                <Text style={styles.lastModalDate}>
+                  {lastSetsModal.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              ) : null}
+              <View style={styles.lastHeaderDivider} />
               {(lastSetsModal?.sets || []).map((set, i) => {
                 const isSeconds = lastSetsModal.unit === 'seconds';
                 const w = set.weight == null || set.weight === 0 ? 'B.W.' : set.weight;
@@ -1001,21 +1008,26 @@ export default function NewSessionScreen({ route, navigation }) {
             <TouchableOpacity style={styles.lastCloseBtn} onPress={() => setLastSetsModal(null)}>
               <Text style={styles.lastCloseText}>Close</Text>
             </TouchableOpacity>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={showLastSession} transparent animationType="fade" onRequestClose={() => setShowLastSession(false)}>
-        <Pressable style={styles.noteOverlay} onPress={() => setShowLastSession(false)}>
-          <Pressable style={styles.noteModal} onPress={() => {}}>
-            <Text style={styles.lastModalHeader}>Last Session</Text>
-            {lastSession?.date ? (
-              <Text style={styles.lastModalDate}>
-                {lastSession.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-              </Text>
-            ) : null}
-            <View style={styles.lastHeaderDivider} />
-            <ScrollView style={{ maxHeight: 400 }}>
+        <View style={styles.noteOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowLastSession(false)} />
+          <View style={styles.noteModal}>
+            <View style={styles.lastGrabHandle} />
+            <TouchableOpacity style={styles.lastCloseX} onPress={() => setShowLastSession(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={COLORS.textMuted} />
+            </TouchableOpacity>
+            <ScrollView style={{ maxHeight: POPUP_SCROLL_MAX }} nestedScrollEnabled>
+              <Text style={styles.lastModalHeader}>Last Session</Text>
+              {lastSession?.date ? (
+                <Text style={styles.lastModalDate}>
+                  {lastSession.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              ) : null}
+              <View style={styles.lastHeaderDivider} />
               {(lastSession?.exercises || []).map((ex, exIdx) => {
                 const isSeconds = ex.unit === 'seconds';
                 return (
@@ -1049,8 +1061,8 @@ export default function NewSessionScreen({ route, navigation }) {
             <TouchableOpacity style={styles.lastCloseBtn} onPress={() => setShowLastSession(false)}>
               <Text style={styles.lastCloseText}>Close</Text>
             </TouchableOpacity>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -1120,6 +1132,21 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
+  },
+  lastGrabHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.textMuted,
+    marginBottom: 12,
+  },
+  lastCloseX: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 10,
+    padding: 4,
   },
   lastModalHeader: {
     color: COLORS.textBright,
@@ -1436,6 +1463,7 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '85%',
     borderWidth: 1,
     borderColor: COLORS.border,
   },

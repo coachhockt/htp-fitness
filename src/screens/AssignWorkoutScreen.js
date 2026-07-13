@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, KeyboardAvoidingView, Platform, BackHandler,
-  Modal, Pressable,
+  Modal, Pressable, Dimensions,
 } from 'react-native';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
@@ -12,6 +12,8 @@ import { estimate1RM, titleCaseExercise, genSupersetGroupId, getSupersetLabel, c
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, handledNoAccess } from '../access';
+
+const POPUP_SCROLL_MAX = Math.round(Dimensions.get('window').height * 0.6);
 
 const SET_COLORS = {
   dropset: '#D4872A',
@@ -797,16 +799,21 @@ export default function AssignWorkoutScreen({ route, navigation }) {
       </Modal>
 
       <Modal visible={lastSetsModal !== null} transparent animationType="fade" onRequestClose={() => setLastSetsModal(null)}>
-        <Pressable style={styles.noteOverlay} onPress={() => setLastSetsModal(null)}>
-          <Pressable style={styles.noteModal} onPress={() => {}}>
-            <Text style={styles.lastModalHeader}>{titleCaseExercise(lastSetsModal?.name || '')}</Text>
-            {lastSetsModal?.date ? (
-              <Text style={styles.lastModalDate}>
-                {lastSetsModal.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-              </Text>
-            ) : null}
-            <View style={styles.lastHeaderDivider} />
-            <ScrollView style={{ maxHeight: 320 }}>
+        <View style={styles.noteOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setLastSetsModal(null)} />
+          <View style={styles.noteModal}>
+            <View style={styles.lastGrabHandle} />
+            <TouchableOpacity style={styles.lastCloseX} onPress={() => setLastSetsModal(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={COLORS.textMuted} />
+            </TouchableOpacity>
+            <ScrollView style={{ maxHeight: POPUP_SCROLL_MAX }} nestedScrollEnabled>
+              <Text style={styles.lastModalHeader}>{titleCaseExercise(lastSetsModal?.name || '')}</Text>
+              {lastSetsModal?.date ? (
+                <Text style={styles.lastModalDate}>
+                  {lastSetsModal.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                </Text>
+              ) : null}
+              <View style={styles.lastHeaderDivider} />
               {(lastSetsModal?.sets || []).map((set, i) => {
                 const isSeconds = lastSetsModal.unit === 'seconds';
                 const w = set.weight == null || set.weight === 0 ? 'B.W.' : set.weight;
@@ -833,8 +840,8 @@ export default function AssignWorkoutScreen({ route, navigation }) {
             <TouchableOpacity style={styles.lastCloseBtn} onPress={() => setLastSetsModal(null)}>
               <Text style={styles.lastCloseText}>Close</Text>
             </TouchableOpacity>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
@@ -934,6 +941,21 @@ const styles = StyleSheet.create({
     fontSize: TYPE.label,
     fontFamily: FONTS.semiBold,
     textAlign: 'right',
+  },
+  lastGrabHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.textMuted,
+    marginBottom: 12,
+  },
+  lastCloseX: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 10,
+    padding: 4,
   },
   lastModalHeader: {
     color: COLORS.textBright,
@@ -1149,6 +1171,7 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '100%',
     maxWidth: 400,
+    maxHeight: '85%',
     borderWidth: 1,
     borderColor: COLORS.border,
   },
