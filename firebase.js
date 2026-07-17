@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 
 const prodConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -28,5 +28,13 @@ export const FIREBASE_API_KEY = firebaseConfig.apiKey;
 
 const app = initializeApp(firebaseConfig);
 console.log('[Firebase] App initialized:', app.name, '| project:', firebaseConfig.projectId, IS_DEV_BACKEND ? '(DEV)' : '(PROD)');
-export const db = getFirestore(app);
+
+// The Firebase JS SDK's default WebChannel transport is unreliable on React
+// Native: its connectivity detection can resolve a write against a half-open
+// connection so the promise fulfills while the mutation never lands on the
+// server. Forcing long-polling is the transport that works reliably on-device
+// (especially on spotty gym Wi-Fi) and prevents silently-lost session writes.
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
 export { app };

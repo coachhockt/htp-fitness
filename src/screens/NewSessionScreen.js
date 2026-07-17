@@ -6,14 +6,28 @@ import {
 } from 'react-native';
 
 const POPUP_SCROLL_MAX = Math.round(Dimensions.get('window').height * 0.6);
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../../firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { compute1RMs, estimate1RM, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
-import { showNoAccess, handledNoAccess } from '../access';
+import { showNoAccess, isPermissionDenied } from '../access';
+
+// How long to wait for a session write to be acknowledged by the server before
+// we stop claiming success. On a dead/spotty connection the write stays queued
+// in the SDK, but we must not tell the trainer it saved — we keep the on-device
+// draft instead so nothing is lost.
+const SAVE_TIMEOUT_MS = 15000;
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('save-timeout')), ms)),
+  ]);
+}
 
 const SET_COLORS = {
   dropset: '#D4872A',
@@ -166,6 +180,78 @@ export default function NewSessionScreen({ route, navigation }) {
   const [durationPicker, setDurationPicker] = useState(false);
   const restZeroFiredRef = useRef(false);
 
+  // --- Durable session draft ---------------------------------------------
+  // The in-progress session is mirrored to AsyncStorage so a crash, force-quit,
+  // or a save that never reaches the server (spotty gym Wi-Fi) doesn't lose the
+  // trainer's work. A stable doc id is stored with the draft so re-saving a
+  // resumed draft overwrites the same session rather than creating a duplicate.
+  const draftKey = `htp:sessionDraft:${user.uid}:${clientId}`;
+  const docIdRef = useRef(null);
+  const savedRef = useRef(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  const KEPT_MESSAGE =
+    "Couldn't reach the server, so this session is saved on this device. Reopen this client while you're online to finish uploading it.";
+
+  function sessionDocRef() {
+    if (!docIdRef.current) docIdRef.current = doc(collection(db, 'sessions')).id;
+    return doc(db, 'sessions', docIdRef.current);
+  }
+
+  // Restore a previous unsaved draft (if any) before we start autosaving.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(draftKey);
+        if (!cancelled && raw) {
+          const draft = JSON.parse(raw);
+          const draftExercises = Array.isArray(draft?.exercises) ? draft.exercises : null;
+          if (draftExercises && draftExercises.length > 0) {
+            Alert.alert(
+              'Resume unsaved session?',
+              'You have an in-progress session for this client that was never saved. Resume it, or discard and start fresh?',
+              [
+                {
+                  text: 'Discard',
+                  style: 'destructive',
+                  onPress: () => { AsyncStorage.removeItem(draftKey).catch(() => {}); setHydrated(true); },
+                },
+                {
+                  text: 'Resume',
+                  onPress: () => {
+                    if (draft?.docId) docIdRef.current = draft.docId;
+                    setExercises(draftExercises);
+                    setHydrated(true);
+                  },
+                },
+              ],
+              { cancelable: false }
+            );
+            return;
+          }
+        }
+      } catch (e) {
+        // Corrupt/unreadable draft — ignore and start fresh.
+      }
+      if (!cancelled) setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Autosave the live session to disk (only after hydration, and never after a
+  // confirmed save has cleared it).
+  useEffect(() => {
+    if (!hydrated || savedRef.current) return;
+    if (exercises.length === 0) {
+      AsyncStorage.removeItem(draftKey).catch(() => {});
+      return;
+    }
+    if (!docIdRef.current) docIdRef.current = doc(collection(db, 'sessions')).id;
+    AsyncStorage.setItem(draftKey, JSON.stringify({ docId: docIdRef.current, exercises })).catch(() => {});
+  }, [exercises, hydrated]);
+  // -----------------------------------------------------------------------
+
   useEffect(() => {
     const id = setInterval(() => {
       setElapsedSec(Math.floor((Date.now() - startTime) / 1000));
@@ -297,7 +383,15 @@ export default function NewSessionScreen({ route, navigation }) {
       'Save Session?',
       'You have unsaved exercises. Do you want to save before leaving?',
       [
-        { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+        {
+          text: 'Discard',
+          style: 'destructive',
+          onPress: () => {
+            savedRef.current = true; // prevent autosave from re-persisting on the way out
+            AsyncStorage.removeItem(draftKey).catch(() => {});
+            navigation.goBack();
+          },
+        },
         { text: 'Stay', style: 'cancel' },
         { text: 'Save', onPress: () => saveAndGoBack() },
       ]
@@ -318,11 +412,10 @@ export default function NewSessionScreen({ route, navigation }) {
     return snap.size;
   }
 
-  async function saveAndGoBack() {
-    if (saving) return;
-    // Deactivated mid-session: can't save, so just leave (don't trap them on the screen).
-    if (isInactive) { navigation.goBack(); return; }
-    const cleaned = cleanupOrphanGroups(
+  // Cleans + validates the live session into the persisted shape (shared by both
+  // save paths so they can't drift).
+  function buildCleanedSession() {
+    return cleanupOrphanGroups(
       exercises
         .map(ex => ({
           name: titleCaseExercise(ex.name),
@@ -339,36 +432,69 @@ export default function NewSessionScreen({ route, navigation }) {
         }))
         .filter(ex => ex.sets.length > 0)
     );
+  }
 
+  // Writes the session and reports what actually happened. Returns:
+  //   'saved'  – confirmed committed to the server (on-device draft cleared)
+  //   'empty'  – nothing to save (draft cleared)
+  //   'capped' – daily limit hit (non-admin)
+  //   'denied' – account deactivated (no-access already shown)
+  //   'kept'   – write failed/timed out; draft retained so it can be resumed later
+  async function commitSession() {
+    const cleaned = buildCleanedSession();
     if (cleaned.length === 0) {
-      navigation.goBack();
-      return;
+      // Nothing worth persisting yet. Drop any stale draft but leave autosave
+      // armed so real data typed afterwards is still captured.
+      await AsyncStorage.removeItem(draftKey).catch(() => {});
+      return 'empty';
     }
 
     setSaving(true);
     try {
       if (user.role !== 'admin') {
         const count = await getDailySessionCount();
-        if (count >= 10) {
-          Alert.alert('Daily Limit', 'You have reached the maximum of 10 sessions per day.');
-          setSaving(false);
-          return;
-        }
+        if (count >= 10) { setSaving(false); return 'capped'; }
       }
       const e1rms = compute1RMs(cleaned);
-      await addDoc(collection(db, 'sessions'), {
-        clientId,
-        trainerId: user.uid,
-        date: serverTimestamp(),
-        exercises: cleaned,
-        estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
-        durationSec: Math.floor((Date.now() - startTime) / 1000),
-      });
-      navigation.goBack();
+      // Fixed doc id (sessionDocRef) makes this idempotent: a resumed draft
+      // re-saves to the same document instead of duplicating it. The timeout
+      // stops us from claiming success on a write that never lands.
+      await withTimeout(
+        setDoc(sessionDocRef(), {
+          clientId,
+          trainerId: user.uid,
+          date: serverTimestamp(),
+          exercises: cleaned,
+          estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
+          durationSec: Math.floor((Date.now() - startTime) / 1000),
+        }),
+        SAVE_TIMEOUT_MS
+      );
+      savedRef.current = true;
+      await AsyncStorage.removeItem(draftKey).catch(() => {});
+      return 'saved';
     } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error saving', e.message);
       setSaving(false);
+      if (isPermissionDenied(e)) { showNoAccess(); return 'denied'; }
+      return 'kept';
     }
+  }
+
+  async function saveAndGoBack() {
+    if (saving) return;
+    // Deactivated mid-session: can't save, so just leave (don't trap them on the screen).
+    if (isInactive) { navigation.goBack(); return; }
+    const result = await commitSession();
+    if (result === 'saved' || result === 'empty') {
+      navigation.goBack();
+    } else if (result === 'capped') {
+      Alert.alert('Daily Limit', 'You have reached the maximum of 10 sessions per day.');
+    } else if (result === 'kept') {
+      Alert.alert('Saved on this device', KEPT_MESSAGE, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    }
+    // 'denied' already surfaced the no-access prompt; stay on the screen.
   }
 
   useLayoutEffect(() => {
@@ -528,54 +654,17 @@ export default function NewSessionScreen({ route, navigation }) {
       Alert.alert('No exercises', 'Add at least one exercise before saving.');
       return;
     }
-
-    const cleaned = cleanupOrphanGroups(
-      exercises
-        .map(ex => ({
-          name: titleCaseExercise(ex.name),
-          sets: ex.sets
-            .filter(s => s.bw || s.weight !== '' || s.reps !== '')
-            .map(s => ({
-              weight: s.bw ? 0 : (s.weight === '' ? null : (parseFloat(s.weight) || 0)),
-              reps: parseInt(s.reps) || 0,
-              ...(s.type ? { type: s.type } : {}),
-            })),
-          ...(ex.supersetGroupId ? { supersetGroupId: ex.supersetGroupId } : {}),
-          ...(ex.unit === 'seconds' ? { unit: 'seconds' } : {}),
-          ...(ex.note ? { note: ex.note } : {}),
-        }))
-        .filter(ex => ex.sets.length > 0)
-    );
-
-    if (cleaned.length === 0) {
-      Alert.alert('No data', 'Enter weight or reps for at least one set.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      if (user.role !== 'admin') {
-        const count = await getDailySessionCount();
-        if (count >= 10) {
-          Alert.alert('Daily Limit', 'You have reached the maximum of 10 sessions per day.');
-          setSaving(false);
-          return;
-        }
-      }
-      const e1rms = compute1RMs(cleaned);
-      await addDoc(collection(db, 'sessions'), {
-        clientId,
-        trainerId: user.uid,
-        date: serverTimestamp(),
-        exercises: cleaned,
-        estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
-        durationSec: Math.floor((Date.now() - startTime) / 1000),
-      });
+    const result = await commitSession();
+    if (result === 'saved') {
       navigation.goBack();
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-      setSaving(false);
+    } else if (result === 'empty') {
+      Alert.alert('No data', 'Enter weight or reps for at least one set.');
+    } else if (result === 'capped') {
+      Alert.alert('Daily Limit', 'You have reached the maximum of 10 sessions per day.');
+    } else if (result === 'kept') {
+      Alert.alert('Saved on this device', KEPT_MESSAGE);
     }
+    // 'denied' already surfaced the no-access prompt.
   }
 
   return (
