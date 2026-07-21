@@ -5,6 +5,7 @@ import {
   ScrollView, Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../../firebase';
 import {
   collection, query, where, orderBy, onSnapshot,
@@ -17,6 +18,17 @@ import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, handledNoAccess } from '../access';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// How long to wait for a write to be acknowledged before we stop claiming
+// success. On a dead/spotty connection the write can stay queued in the SDK;
+// we keep the on-device draft instead of falsely reporting a save.
+const SAVE_TIMEOUT_MS = 15000;
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('save-timeout')), ms)),
+  ]);
+}
+
 export default function ClientDetailScreen({ route, navigation }) {
   const { clientId } = route.params;
   const { user, isInactive } = useAuth();
@@ -27,6 +39,10 @@ export default function ClientDetailScreen({ route, navigation }) {
   const [sessionsInput, setSessionsInput] = useState('');
   const [sessionsSaving, setSessionsSaving] = useState(false);
   const [isAppUser, setIsAppUser] = useState(false);
+
+  // On-device backup of an in-progress "sessions remaining" edit, so a save
+  // that fails/times out on a bad connection doesn't lose what was typed.
+  const sessionsDraftKey = `htp:sessionsRemainingDraft:${user.uid}:${clientId}`;
 
   useEffect(() => {
     async function loadClient() {
@@ -192,9 +208,55 @@ export default function ClientDetailScreen({ route, navigation }) {
 
   function openSessionsModal() {
     const current = getSessionsRemaining(client, sessions.length);
-    setSessionsInput(typeof current === 'number' ? String(current) : '');
-    setSessionsModal(true);
+    const fallback = typeof current === 'number' ? String(current) : '';
+    AsyncStorage.getItem(sessionsDraftKey)
+      .then(raw => {
+        const draftValue = raw ? JSON.parse(raw)?.value : null;
+        if (draftValue != null && draftValue.trim() !== '') {
+          Alert.alert(
+            'Resume unsaved edit?',
+            "You started updating this client's sessions remaining but it never saved. Resume it, or discard and start fresh?",
+            [
+              {
+                text: 'Discard',
+                style: 'destructive',
+                onPress: () => {
+                  AsyncStorage.removeItem(sessionsDraftKey).catch(() => {});
+                  setSessionsInput(fallback);
+                  setSessionsModal(true);
+                },
+              },
+              {
+                text: 'Resume',
+                onPress: () => {
+                  setSessionsInput(draftValue);
+                  setSessionsModal(true);
+                },
+              },
+            ],
+            { cancelable: false }
+          );
+        } else {
+          setSessionsInput(fallback);
+          setSessionsModal(true);
+        }
+      })
+      .catch(() => {
+        setSessionsInput(fallback);
+        setSessionsModal(true);
+      });
   }
+
+  // Mirror the typed value to disk while the modal is open so a save that
+  // fails/times out on a bad connection doesn't lose it.
+  useEffect(() => {
+    if (!sessionsModal) return;
+    if (sessionsInput.trim() === '') {
+      AsyncStorage.removeItem(sessionsDraftKey).catch(() => {});
+      return;
+    }
+    AsyncStorage.setItem(sessionsDraftKey, JSON.stringify({ value: sessionsInput })).catch(() => {});
+  }, [sessionsInput, sessionsModal]);
 
   async function saveSessionsRemaining() {
     const raw = sessionsInput.trim();
@@ -209,14 +271,22 @@ export default function ClientDetailScreen({ route, navigation }) {
     }
     setSessionsSaving(true);
     try {
-      await writePatch({
+      await withTimeout(writePatch({
         sessionsRemaining: n,
         sessionsRemainingUpdatedAt: new Date().toISOString(),
-      });
+      }), SAVE_TIMEOUT_MS);
       setClient(prev => ({ ...prev, _fromUser: false, sessionsRemaining: n }));
+      await AsyncStorage.removeItem(sessionsDraftKey).catch(() => {});
       setSessionsModal(false);
     } catch (e) {
-      Alert.alert('Error', e.message);
+      if (handledNoAccess(e)) return;
+      // The typed value is already autosaved to disk (see effect above) — keep
+      // it and tell the trainer instead of losing it or claiming success.
+      setSessionsModal(false);
+      Alert.alert(
+        'Saved on this device',
+        "Couldn't reach the server, so this update is saved on this device. Reopen \"Update Sessions\" for this client while you're online to finish saving it."
+      );
     } finally {
       setSessionsSaving(false);
     }
