@@ -12,7 +12,8 @@ const SET_COLORS = {
 
 import { db } from '../../firebase';
 import { getExerciseSuggestions } from '../exercises';
-import { showNoAccess, handledNoAccess } from '../access';
+import { showNoAccess } from '../access';
+import { guardedSave } from '../saveGuard';
 import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc, addDoc, deleteDoc, Timestamp, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -67,31 +68,32 @@ export default function SessionDetailScreen({ route, navigation }) {
   async function toggleBookmark() {
     if (!session || !sessionId) return;
     if (!user?.uid) return;
-    try {
-      if (bookmarkDocId) {
-        await deleteDoc(doc(db, 'savedWorkouts', bookmarkDocId));
-        setBookmarkDocId(null);
-      } else {
-        const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
-        const title = exerciseNames.length > 0
-          ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
-          : 'Workout';
-        const ref = await addDoc(collection(db, 'savedWorkouts'), {
-          clientId: user.uid,
-          type: 'bookmark',
-          sessionId,
-          title,
-          exercises: session.exercises || [],
-          assignedBy: null,
-          createdAt: serverTimestamp(),
-          note: null,
-        });
-        setBookmarkDocId(ref.id);
-      }
-    } catch (err) {
-      console.error('[toggleBookmark]', err);
-      if (!handledNoAccess(err)) Alert.alert('Bookmark failed', err?.message ?? 'Unknown error');
+    if (bookmarkDocId) {
+      const result = await guardedSave(
+        () => deleteDoc(doc(db, 'savedWorkouts', bookmarkDocId)),
+        { what: 'bookmark removal' }
+      );
+      if (result === 'saved') setBookmarkDocId(null);
+      return;
     }
+    const exerciseNames = (session.exercises || []).map(e => e.name).filter(Boolean);
+    const title = exerciseNames.length > 0
+      ? exerciseNames.slice(0, 3).join(', ') + (exerciseNames.length > 3 ? '...' : '')
+      : 'Workout';
+    let ref = null;
+    const result = await guardedSave(async () => {
+      ref = await addDoc(collection(db, 'savedWorkouts'), {
+        clientId: user.uid,
+        type: 'bookmark',
+        sessionId,
+        title,
+        exercises: session.exercises || [],
+        assignedBy: null,
+        createdAt: serverTimestamp(),
+        note: null,
+      });
+    }, { what: 'bookmark' });
+    if (result === 'saved' && ref) setBookmarkDocId(ref.id);
   }
 
   useEffect(() => {
@@ -358,25 +360,22 @@ export default function SessionDetailScreen({ route, navigation }) {
     }
 
     setSaving(true);
-    try {
-      const e1rms = compute1RMs(cleaned);
-      await updateDoc(doc(db, 'sessions', sessionId), {
-        date: Timestamp.fromDate(parsedDate),
-        exercises: cleaned,
-        estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
-      });
-      setSession(prev => ({
-        ...prev,
-        date: Timestamp.fromDate(parsedDate),
-        exercises: cleaned,
-        estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
-      }));
-      setEditing(false);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-    } finally {
-      setSaving(false);
-    }
+    const e1rms = compute1RMs(cleaned);
+    const result = await guardedSave(() => updateDoc(doc(db, 'sessions', sessionId), {
+      date: Timestamp.fromDate(parsedDate),
+      exercises: cleaned,
+      estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
+    }), { what: 'session edit' });
+    setSaving(false);
+    // Stay in edit mode on failure so the edits are still on screen to retry.
+    if (result !== 'saved') return;
+    setSession(prev => ({
+      ...prev,
+      date: Timestamp.fromDate(parsedDate),
+      exercises: cleaned,
+      estimated1RMs: e1rms.map(e => ({ name: e.name, value: e.estimated1RM })),
+    }));
+    setEditing(false);
   }
 
   // ── VIEW MODE ──

@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { db, app, FIREBASE_API_KEY } from '../../firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { withTimeout } from '../saveGuard';
 
 const AuthContext = createContext(null);
 const API_KEY = FIREBASE_API_KEY;
@@ -203,7 +204,10 @@ export function AuthProvider({ children }) {
   }
 
   async function saveProfile(profileData) {
-    await updateDoc(doc(db, 'users', user.uid), { profile: profileData });
+    // Timed out rather than bare-awaited: offline, the write is queued and the
+    // promise never settles, which would hang every caller with no feedback.
+    // Throwing lets callers report the failure instead of appearing to succeed.
+    await withTimeout(updateDoc(doc(db, 'users', user.uid), { profile: profileData }));
     const updated = { ...user, profile: profileData };
     setUser(updated);
     await AsyncStorage.setItem('user', JSON.stringify(updated));

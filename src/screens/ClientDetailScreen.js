@@ -17,17 +17,7 @@ import { getSessionsRemaining, titleCaseExercise } from '../utils';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, handledNoAccess } from '../access';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-// How long to wait for a write to be acknowledged before we stop claiming
-// success. On a dead/spotty connection the write can stay queued in the SDK;
-// we keep the on-device draft instead of falsely reporting a save.
-const SAVE_TIMEOUT_MS = 15000;
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('save-timeout')), ms)),
-  ]);
-}
+import { guardedSave, withTimeout, SAVE_TIMEOUT_MS } from '../saveGuard';
 
 export default function ClientDetailScreen({ route, navigation }) {
   const { clientId } = route.params;
@@ -153,23 +143,21 @@ export default function ClientDetailScreen({ route, navigation }) {
           onPress: async () => {
             const newDeductions = (client.manualDeductions || 0) + 1;
             const newRemaining = currentRemaining - 1;
-            try {
-              await writePatch({
-                manualDeductions: newDeductions,
-                manualDeductionsUpdatedAt: new Date().toISOString(),
-                sessionsRemaining: newRemaining,
-                sessionsRemainingUpdatedAt: new Date().toISOString(),
-              });
-              setClient(prev => ({
-                ...prev,
-                _fromUser: false,
-                manualDeductions: newDeductions,
-                sessionsRemaining: newRemaining,
-              }));
-              await sendNotification(method, newRemaining);
-            } catch (e) {
-              Alert.alert('Error', e.message);
-            }
+            const result = await guardedSave(() => writePatch({
+              manualDeductions: newDeductions,
+              manualDeductionsUpdatedAt: new Date().toISOString(),
+              sessionsRemaining: newRemaining,
+              sessionsRemainingUpdatedAt: new Date().toISOString(),
+            }), { what: 'session deduction' });
+            // Don't message the client a new total the server never recorded.
+            if (result !== 'saved') return;
+            setClient(prev => ({
+              ...prev,
+              _fromUser: false,
+              manualDeductions: newDeductions,
+              sessionsRemaining: newRemaining,
+            }));
+            await sendNotification(method, newRemaining);
           },
         },
       ]

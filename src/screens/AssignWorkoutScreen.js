@@ -11,7 +11,8 @@ import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { estimate1RM, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
-import { showNoAccess, handledNoAccess } from '../access';
+import { showNoAccess } from '../access';
+import { guardedSave } from '../saveGuard';
 
 const POPUP_SCROLL_MAX = Math.round(Dimensions.get('window').height * 0.6);
 
@@ -432,23 +433,23 @@ export default function AssignWorkoutScreen({ route, navigation }) {
     }
 
     setSaving(true);
-    try {
-      await addDoc(collection(db, 'savedWorkouts'), {
-        clientId,
-        type: 'assigned',
-        sessionId: null,
-        title: title.trim(),
-        exercises: cleaned,
-        assignedBy: user.uid,
-        createdAt: serverTimestamp(),
-        note: note.trim() || null,
-      });
-      navigation.goBack();
-      Alert.alert('Assigned', `Workout assigned to ${name}.`);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
+    const result = await guardedSave(() => addDoc(collection(db, 'savedWorkouts'), {
+      clientId,
+      type: 'assigned',
+      sessionId: null,
+      title: title.trim(),
+      exercises: cleaned,
+      assignedBy: user.uid,
+      createdAt: serverTimestamp(),
+      note: note.trim() || null,
+    }), { what: 'assigned workout' });
+    // Stay on the editor unless it actually landed, so the work isn't lost.
+    if (result !== 'saved') {
       setSaving(false);
+      return;
     }
+    navigation.goBack();
+    Alert.alert('Assigned', `Workout assigned to ${name}.`);
   }
 
   return (

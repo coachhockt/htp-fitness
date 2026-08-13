@@ -15,19 +15,7 @@ import { compute1RMs, estimate1RM, titleCaseExercise, genSupersetGroupId, getSup
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, isPermissionDenied } from '../access';
-
-// How long to wait for a session write to be acknowledged by the server before
-// we stop claiming success. On a dead/spotty connection the write stays queued
-// in the SDK, but we must not tell the trainer it saved — we keep the on-device
-// draft instead so nothing is lost.
-const SAVE_TIMEOUT_MS = 15000;
-
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('save-timeout')), ms)),
-  ]);
-}
+import { withTimeout, SAVE_TIMEOUT_MS } from '../saveGuard';
 
 const SET_COLORS = {
   dropset: '#D4872A',

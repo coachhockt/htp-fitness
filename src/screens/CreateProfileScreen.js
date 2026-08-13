@@ -6,6 +6,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
+import { guardedSave } from '../saveGuard';
 
 export default function CreateProfileScreen() {
   const { saveProfile } = useAuth();
@@ -29,21 +30,16 @@ export default function CreateProfileScreen() {
       ? `${firstName.trim()} ${lastName.trim()}`
       : firstName.trim();
     setSaving(true);
-    try {
-      await saveProfile({
-        firstName: firstName.trim(),
-        lastName: lastName.trim() || null,
-        fullName,
-        age: age.trim() ? parseInt(age.trim()) : null,
-        sex: sex || null,
-        bodyWeight: bodyWeight.trim() ? parseFloat(bodyWeight.trim()) : null,
-        bodyFat: bodyFat.trim() ? parseFloat(bodyFat.trim()) : null,
-      });
-    } catch (e) {
-      Alert.alert('Error', e.message);
-    } finally {
-      setSaving(false);
-    }
+    await guardedSave(() => saveProfile({
+      firstName: firstName.trim(),
+      lastName: lastName.trim() || null,
+      fullName,
+      age: age.trim() ? parseInt(age.trim()) : null,
+      sex: sex || null,
+      bodyWeight: bodyWeight.trim() ? parseFloat(bodyWeight.trim()) : null,
+      bodyFat: bodyFat.trim() ? parseFloat(bodyFat.trim()) : null,
+    }), { what: 'profile', onRetry: handleSubmit });
+    setSaving(false);
   }
 
   return (

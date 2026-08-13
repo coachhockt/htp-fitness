@@ -10,7 +10,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited } from '../utils';
-import { handledNoAccess } from '../access';
+import { guardedSave } from '../saveGuard';
 
 export default function ClientProfileScreen({ route, navigation }) {
   const { clientId } = route.params;
@@ -101,13 +101,11 @@ export default function ClientProfileScreen({ route, navigation }) {
       email: editEmail.trim() || null,
       age: editAge.trim() ? parseInt(editAge.trim()) : null,
     };
-    try {
-      await writePatch(updated);
-      setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
-      setProfileModal(false);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-    }
+    const result = await guardedSave(() => writePatch(updated), { what: 'profile', onRetry: saveProfile });
+    // Keep the modal open on failure so the edits stay on screen.
+    if (result !== 'saved') return;
+    setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
+    setProfileModal(false);
   }
 
   async function saveBodyStats() {
@@ -145,24 +143,18 @@ export default function ClientProfileScreen({ route, navigation }) {
       }
       updated.bodyHistory = history;
     }
-    try {
-      await writePatch(updated);
-      setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
-      setBodyModal(false);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-    }
+    const result = await guardedSave(() => writePatch(updated), { what: 'body stats', onRetry: saveBodyStats });
+    if (result !== 'saved') return;
+    setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
+    setBodyModal(false);
   }
 
   async function saveNotes() {
     const updated = { note: editNote.trim() || null };
-    try {
-      await writePatch(updated);
-      setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
-      setNotesModal(false);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-    }
+    const result = await guardedSave(() => writePatch(updated), { what: 'note', onRetry: saveNotes });
+    if (result !== 'saved') return;
+    setClient(prev => ({ ...prev, ...updated, _fromUser: false }));
+    setNotesModal(false);
   }
 
   if (loading) {

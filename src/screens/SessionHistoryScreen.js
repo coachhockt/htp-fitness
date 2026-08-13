@@ -8,7 +8,7 @@ import {
   collection, query, where, orderBy, onSnapshot, doc, deleteDoc,
 } from 'firebase/firestore';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
-import { handledNoAccess } from '../access';
+import { guardedSave } from '../saveGuard';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 const PAGE_SIZE = 10;
@@ -54,11 +54,10 @@ export default function SessionHistoryScreen({ route, navigation }) {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'sessions', session.id));
-            } catch (e) {
-              if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-            }
+            await guardedSave(
+              () => deleteDoc(doc(db, 'sessions', session.id)),
+              { what: 'session deletion', onRetry: () => confirmDelete(session) }
+            );
           },
         },
       ]

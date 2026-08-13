@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getSessionsRemaining } from '../utils';
+import { guardedSave } from '../saveGuard';
 import ProfileMenu from '../components/ProfileMenu';
 
 export default function ClientsScreen({ navigation }) {
@@ -67,7 +68,7 @@ export default function ClientsScreen({ navigation }) {
     const fullName = newLast.trim()
       ? `${newFirst.trim()} ${newLast.trim()}`
       : newFirst.trim();
-    await addDoc(collection(db, 'clients'), {
+    const result = await guardedSave(() => addDoc(collection(db, 'clients'), {
       firstName: newFirst.trim(),
       lastName: newLast.trim() || null,
       name: fullName,
@@ -79,7 +80,9 @@ export default function ClientsScreen({ navigation }) {
       note: newNote.trim() || null,
       trainerId: user.uid,
       createdAt: serverTimestamp(),
-    });
+    }), { what: 'new client', onRetry: addClient });
+    // Keep the form filled on a hard failure so nothing has to be retyped.
+    if (result === 'failed' || result === 'denied') return;
     setNewFirst('');
     setNewLast('');
     setNewPhone('');
@@ -101,12 +104,14 @@ export default function ClientsScreen({ navigation }) {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            const sessionsQuery = query(collection(db, 'sessions'), where('clientId', '==', client.id));
-            const sessionsSnap = await getDocs(sessionsQuery);
-            const batch = writeBatch(db);
-            sessionsSnap.docs.forEach(d => batch.delete(d.ref));
-            batch.delete(doc(db, 'clients', client.id));
-            await batch.commit();
+            await guardedSave(async () => {
+              const sessionsQuery = query(collection(db, 'sessions'), where('clientId', '==', client.id));
+              const sessionsSnap = await getDocs(sessionsQuery);
+              const batch = writeBatch(db);
+              sessionsSnap.docs.forEach(d => batch.delete(d.ref));
+              batch.delete(doc(db, 'clients', client.id));
+              await batch.commit();
+            }, { what: 'client deletion', onRetry: () => handleDeleteClient(client) });
           },
         },
       ]

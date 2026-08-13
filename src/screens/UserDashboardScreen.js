@@ -13,7 +13,8 @@ import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited } from '../utils';
-import { showNoAccess, handledNoAccess } from '../access';
+import { showNoAccess } from '../access';
+import { guardedSave } from '../saveGuard';
 import { isStepsAvailable, requestStepAccess, getTodaySteps, getWeeklySteps } from '../health';
 import ProfileMenu from '../components/ProfileMenu';
 import { SAMPLE_WORKOUTS } from '../sampleWorkouts';
@@ -158,27 +159,26 @@ export default function UserDashboardScreen({ navigation }) {
     if (!schedule) return;
     const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     const dayKey = DAY_KEYS[w.date.getDay()];
-    try {
-      const updated = { ...schedule };
-      const specific = schedule.specificDates || {};
-      const isInSpecific = !Array.isArray(specific) && w.dateStr in specific;
-      const isRecurring = schedule.days?.[dayKey]?.enabled;
+    const updated = { ...schedule };
+    const specific = schedule.specificDates || {};
+    const isInSpecific = !Array.isArray(specific) && w.dateStr in specific;
+    const isRecurring = schedule.days?.[dayKey]?.enabled;
 
-      if (isInSpecific) {
-        const newSpecific = { ...specific };
-        delete newSpecific[w.dateStr];
-        updated.specificDates = newSpecific;
-      }
-      if (isRecurring) {
-        const skipped = new Set(schedule.skippedDates || []);
-        skipped.add(w.dateStr);
-        updated.skippedDates = Array.from(skipped);
-      }
-      updated.updatedAt = new Date().toISOString();
-      await setDoc(doc(db, 'schedules', user.uid), updated);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
+    if (isInSpecific) {
+      const newSpecific = { ...specific };
+      delete newSpecific[w.dateStr];
+      updated.specificDates = newSpecific;
     }
+    if (isRecurring) {
+      const skipped = new Set(schedule.skippedDates || []);
+      skipped.add(w.dateStr);
+      updated.skippedDates = Array.from(skipped);
+    }
+    updated.updatedAt = new Date().toISOString();
+    await guardedSave(
+      () => setDoc(doc(db, 'schedules', user.uid), updated),
+      { what: 'cancellation', onRetry: () => cancelUpcoming(w) }
+    );
   }
 
   function toDate(ts) {
@@ -268,14 +268,12 @@ export default function UserDashboardScreen({ navigation }) {
   async function persistGoal(weeklySessions) {
     const p = user.profile || {};
     setGoalSaving(true);
-    try {
-      await saveProfile({ ...p, goals: { ...(p.goals || {}), weeklySessions } });
-      setGoalModal(false);
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-    } finally {
-      setGoalSaving(false);
-    }
+    const result = await guardedSave(
+      () => saveProfile({ ...p, goals: { ...(p.goals || {}), weeklySessions } }),
+      { what: 'goal' }
+    );
+    setGoalSaving(false);
+    if (result === 'saved') setGoalModal(false);
   }
 
   function handleSaveGoal() {
@@ -380,8 +378,9 @@ export default function UserDashboardScreen({ navigation }) {
       profileData.bodyHistory = history;
     }
 
-    await saveProfile(profileData);
-    setEditModal(false);
+    const result = await guardedSave(() => saveProfile(profileData), { what: 'profile' });
+    // Leave the editor open on failure so the entered numbers aren't thrown away.
+    if (result === 'saved') setEditModal(false);
   }
 
   const profile = user.profile || {};

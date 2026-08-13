@@ -9,7 +9,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
-import { handledNoAccess } from '../access';
+import { guardedSave } from '../saveGuard';
 import { SAMPLE_WORKOUTS } from '../sampleWorkouts';
 
 const TABS = ['My Saved', 'From Trainer', 'Samples'];
@@ -61,8 +61,10 @@ export default function SavedWorkoutsScreen({ navigation }) {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          try { await deleteDoc(doc(db, 'savedWorkouts', item.id)); }
-          catch (e) { if (!handledNoAccess(e)) Alert.alert('Error', e.message); }
+          await guardedSave(
+            () => deleteDoc(doc(db, 'savedWorkouts', item.id)),
+            { what: 'removal', onRetry: () => confirmDelete(item) }
+          );
         },
       },
     ]);

@@ -12,17 +12,7 @@ import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getSessionsRemaining } from '../utils';
 import { handledNoAccess } from '../access';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
-// How long to wait for a write to be acknowledged before we stop claiming
-// success. On a dead/spotty connection the write can stay queued in the SDK;
-// we keep the on-device draft instead of falsely reporting a save.
-const SAVE_TIMEOUT_MS = 15000;
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('save-timeout')), ms)),
-  ]);
-}
+import { guardedSave, withTimeout, SAVE_TIMEOUT_MS } from '../saveGuard';
 
 export default function PurchaseHistoryScreen({ route, navigation }) {
   const { clientId } = route.params;
@@ -247,19 +237,21 @@ export default function PurchaseHistoryScreen({ route, navigation }) {
   async function deletePurchase(index) {
     const old = client?.purchases?.[index];
     if (!old) return;
-    try {
-      const newPurchases = client.purchases.filter((_, i) => i !== index);
-      const currentRemaining = getSessionsRemaining(client, loggedCount) || 0;
-      const newRemaining = currentRemaining - (old.sessions || 0);
-      await writePatch({
+    const newPurchases = client.purchases.filter((_, i) => i !== index);
+    const currentRemaining = getSessionsRemaining(client, loggedCount) || 0;
+    const newRemaining = currentRemaining - (old.sessions || 0);
+    const result = await guardedSave(
+      () => writePatch({
         purchases: newPurchases,
         sessionsRemaining: newRemaining,
         sessionsRemainingUpdatedAt: new Date().toISOString(),
-      });
-      setClient(prev => ({ ...prev, _fromUser: false, purchases: newPurchases, sessionsRemaining: newRemaining }));
-    } catch (e) {
-      if (!handledNoAccess(e)) Alert.alert('Error', e.message);
-    }
+      }),
+      { what: 'purchase deletion', onRetry: () => deletePurchase(index) }
+    );
+    // Keep the purchase on screen unless the server confirmed the delete, so
+    // the list never shows a removal that didn't land.
+    if (result !== 'saved') return;
+    setClient(prev => ({ ...prev, _fromUser: false, purchases: newPurchases, sessionsRemaining: newRemaining }));
   }
 
   function applyDateFilter() {

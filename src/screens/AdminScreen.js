@@ -7,6 +7,7 @@ import { db } from '../../firebase';
 import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
+import { guardedSave } from '../saveGuard';
 
 // Tab order. 'pending' is the approval inbox for new signups.
 const TABS = ['pending', 'inPerson', 'online', 'inactive'];
@@ -52,23 +53,18 @@ export default function AdminScreen() {
 
   async function moveTo(userId, newCategory) {
     setMoveMenu(null);
-    try {
-      // Also clear legacy status so a legacy 'closed' doesn't perpetually block login
-      await updateDoc(doc(db, 'users', userId), {
-        category: newCategory,
-        status: newCategory === 'inactive' ? 'inactive' : 'active',
-      });
-    } catch (e) {
-      Alert.alert('Error', e.message);
-    }
+    // Also clear legacy status so a legacy 'closed' doesn't perpetually block login
+    await guardedSave(() => updateDoc(doc(db, 'users', userId), {
+      category: newCategory,
+      status: newCategory === 'inactive' ? 'inactive' : 'active',
+    }), { what: 'category change', onRetry: () => moveTo(userId, newCategory) });
   }
 
   async function dismissNew(userId) {
-    try {
-      await updateDoc(doc(db, 'users', userId), { isNew: false });
-    } catch (e) {
-      Alert.alert('Error', e.message);
-    }
+    await guardedSave(
+      () => updateDoc(doc(db, 'users', userId), { isNew: false }),
+      { what: 'change' }
+    );
   }
 
   function confirmReject(item) {
