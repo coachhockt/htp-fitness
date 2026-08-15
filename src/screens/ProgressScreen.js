@@ -7,6 +7,7 @@ import { db } from '../../firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { LineChart } from 'react-native-chart-kit';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
+import { exerciseKey, titleCaseExercise } from '../utils';
 
 const CHART_WIDTH = Dimensions.get('window').width - 72;
 
@@ -71,11 +72,22 @@ export default function ProgressScreen({ route, navigation }) {
           });
         setSessions(data);
 
-        const nameSet = new Set();
-        data.forEach(s => s.exercises?.forEach(ex => nameSet.add(ex.name)));
-        const names = [...nameSet].sort();
+        // Collapse name variants onto one entry per lift. Sessions logged
+        // before names were title-cased on save (2026-04-26) hold the raw
+        // typed text, so matching on the exact string would list "bench press"
+        // and "Bench Press" separately and hide the older history behind a
+        // second pill. Display is title-cased so the list reads consistently
+        // however it was typed.
+        const byKey = new Map();
+        data.forEach(s => s.exercises?.forEach(ex => {
+          const key = exerciseKey(ex.name);
+          if (key && !byKey.has(key)) byKey.set(key, titleCaseExercise(ex.name));
+        }));
+        const names = [...byKey.entries()]
+          .map(([key, label]) => ({ key, label }))
+          .sort((a, b) => a.label.localeCompare(b.label));
         setExerciseNames(names);
-        if (names.length > 0) setSelected(names[0]);
+        if (names.length > 0) setSelected(names[0].key);
       } catch (e) {
         console.warn('Progress load error:', e);
       }
@@ -97,9 +109,11 @@ export default function ProgressScreen({ route, navigation }) {
     Promise.all([load(), loadBody()]).finally(() => setLoading(false));
   }, [clientId]);
 
-  const filteredNames = exerciseNames.filter(name =>
-    name.toLowerCase().includes(searchText.toLowerCase())
+  const filteredNames = exerciseNames.filter(ex =>
+    ex.label.toLowerCase().includes(searchText.toLowerCase())
   );
+  // `selected` holds the match key; this is the name to show for it.
+  const selectedName = exerciseNames.find(ex => ex.key === selected)?.label || '';
 
   function parseDate(str) {
     if (!str.trim()) return null;
@@ -116,9 +130,9 @@ export default function ProgressScreen({ route, navigation }) {
     if (end) end.setHours(23, 59, 59, 999);
 
     return sessions
-      .filter(s => s.exercises?.some(ex => ex.name === selected))
+      .filter(s => s.exercises?.some(ex => exerciseKey(ex.name) === selected))
       .map(s => {
-        const ex = s.exercises.find(e => e.name === selected);
+        const ex = s.exercises.find(e => exerciseKey(e.name) === selected);
         const sets = ex.sets || [];
         const maxWeight = Math.max(...sets.map(set => set.weight || 0), 0);
         const totalVol = sets.reduce((sum, set) => sum + (set.weight || 0) * (set.reps || 0), 0);
@@ -242,14 +256,14 @@ export default function ProgressScreen({ route, navigation }) {
             onChangeText={(text) => {
               setSearchText(text);
               if (!text.trim()) {
-                if (exerciseNames.length > 0) setSelected(exerciseNames[0]);
+                if (exerciseNames.length > 0) setSelected(exerciseNames[0].key);
                 return;
               }
               const matches = exerciseNames.filter(n =>
-                n.toLowerCase().includes(text.toLowerCase())
+                n.label.toLowerCase().includes(text.toLowerCase())
               );
               if (matches.length > 0) {
-                setSelected(matches[0]);
+                setSelected(matches[0].key);
               } else {
                 setSelected(null);
               }
@@ -260,14 +274,14 @@ export default function ProgressScreen({ route, navigation }) {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pills}>
               {filteredNames.map(ex => (
                 <TouchableOpacity
-                  key={ex}
-                  style={[styles.pill, selected === ex && styles.pillActive]}
+                  key={ex.key}
+                  style={[styles.pill, selected === ex.key && styles.pillActive]}
                   onPress={() => {
-                    setSelected(ex);
-                    setSearchText(ex);
+                    setSelected(ex.key);
+                    setSearchText(ex.label);
                   }}
                 >
-                  <Text style={[styles.pillText, selected === ex && styles.pillTextActive]}>{ex}</Text>
+                  <Text style={[styles.pillText, selected === ex.key && styles.pillTextActive]}>{ex.label}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -278,7 +292,7 @@ export default function ProgressScreen({ route, navigation }) {
           )}
 
           {selected && (
-            <Text style={styles.selectedLabel}>Showing: {selected}</Text>
+            <Text style={styles.selectedLabel}>Showing: {selectedName}</Text>
           )}
         </>
       )}
@@ -379,7 +393,7 @@ export default function ProgressScreen({ route, navigation }) {
 
       {mode === 'exercise' && selected && points.length === 1 && (
         <Text style={styles.notice}>
-          Log at least 2 sessions with {selected} to see progress charts.
+          Log at least 2 sessions with {selectedName} to see progress charts.
         </Text>
       )}
 
@@ -470,7 +484,7 @@ export default function ProgressScreen({ route, navigation }) {
             <Text style={styles.fullscreenCloseText}>✕ Close</Text>
           </TouchableOpacity>
           <Text style={styles.fullscreenTitle}>
-            {fullscreenChart?.title} — {selected}
+            {fullscreenChart?.title} — {selectedName}
           </Text>
           {fullscreenChart && (
             <LineChart
@@ -487,7 +501,7 @@ export default function ProgressScreen({ route, navigation }) {
 
       {mode === 'exercise' && selected && points.length >= 2 && (
         <View style={styles.statsCard}>
-          <Text style={styles.statsTitle}>All-Time — {selected}</Text>
+          <Text style={styles.statsTitle}>All-Time — {selectedName}</Text>
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <Text style={[styles.statVal, { color: '#D4872A' }]}>

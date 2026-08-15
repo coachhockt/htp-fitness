@@ -7,6 +7,14 @@ export function titleCaseExercise(name) {
   }).join(' ');
 }
 
+// Canonical key for matching the same exercise across sessions. Exercise names
+// were only title-cased on save from 2026-04-26, so sessions logged before that
+// hold whatever was typed — "bench press", "BENCH PRESS", "Bench  Press" are all
+// the same lift and have to collapse to one key.
+export function exerciseKey(name) {
+  return (name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
 // Epley formula: 1RM = weight × (1 + reps / 30)
 export function estimate1RM(weight, reps) {
   if (weight == null || reps == null) return 0;

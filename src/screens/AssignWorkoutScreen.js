@@ -8,7 +8,7 @@ import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
-import { estimate1RM, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
+import { estimate1RM, exerciseKey, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess } from '../access';
@@ -159,7 +159,6 @@ export default function AssignWorkoutScreen({ route, navigation }) {
       const names = new Set();
       const best = {};
       const last = {};
-      const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
 
       const sessions = snap.docs
         .map(d => {
@@ -173,7 +172,7 @@ export default function AssignWorkoutScreen({ route, navigation }) {
       for (const s of sessions) {
         for (const ex of s.exercises) {
           names.add(ex.name);
-          const key = ex.name?.toLowerCase().trim();
+          const key = exerciseKey(ex.name);
           if (!key) continue;
 
           if (!last[key]) {
@@ -194,25 +193,30 @@ export default function AssignWorkoutScreen({ route, navigation }) {
             }
           }
 
-          if (s.date.getTime() >= cutoff) {
-            let heaviest = null;
-            for (const set of (ex.sets || [])) {
-              const w = set.weight == null ? 0 : set.weight;
-              if (w <= 0) continue;
-              if (!heaviest || w > heaviest.weight) {
-                heaviest = { weight: w, reps: set.reps || 0 };
-              }
-            }
-            if (heaviest) {
-              const prev = best[key];
-              if (!prev || heaviest.weight > prev.weight) {
-                best[key] = {
-                  date: s.date,
-                  weight: heaviest.weight,
-                  reps: heaviest.reps,
-                  unit: ex.unit || 'reps',
-                };
-              }
+          // All-time, ranked by estimated 1RM — same basis as the Best chip on
+          // the current-session screen, so one lift can't show two different
+          // "Best" values depending on which screen you're looking at.
+          const unit = ex.unit || 'reps';
+          const isSeconds = unit === 'seconds';
+          let top = null;
+          for (const set of (ex.sets || [])) {
+            const w = set.weight == null ? 0 : set.weight;
+            if (w <= 0) continue;
+            const reps = set.reps || 0;
+            const score = isSeconds ? w : estimate1RM(w, reps);
+            if (score <= 0) continue;
+            if (!top || score > top.score) top = { weight: w, reps, score };
+          }
+          if (top) {
+            const prev = best[key];
+            if (!prev || top.score > prev.score) {
+              best[key] = {
+                date: s.date,
+                weight: top.weight,
+                reps: top.reps,
+                score: top.score,
+                unit,
+              };
             }
           }
         }
@@ -555,7 +559,7 @@ export default function AssignWorkoutScreen({ route, navigation }) {
               <Text style={styles.addSetText}>+ Add Set</Text>
             </TouchableOpacity>
             {(() => {
-              const k = ex.name?.toLowerCase().trim();
+              const k = exerciseKey(ex.name);
               const last = pastLast[k];
               const best = pastBest[k];
               if (!last && !best) return null;
@@ -571,7 +575,7 @@ export default function AssignWorkoutScreen({ route, navigation }) {
               if (best) {
                 const isSeconds = best.unit === 'seconds';
                 const r = isSeconds ? `${best.reps} sec` : best.reps;
-                const oneRm = isSeconds ? null : Math.round(estimate1RM(best.weight, best.reps));
+                const oneRm = isSeconds ? null : Math.round(best.score);
                 bestStr = `Best ${best.weight}×${r}${oneRm ? `  ·  ${oneRm} 1RM` : ''}`;
               }
 

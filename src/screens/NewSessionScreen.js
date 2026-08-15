@@ -11,7 +11,7 @@ import { db } from '../../firebase';
 import { collection, doc, setDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
-import { compute1RMs, estimate1RM, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
+import { compute1RMs, estimate1RM, exerciseKey, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import { Ionicons } from '@expo/vector-icons';
 import { getExerciseSuggestions } from '../exercises';
 import { showNoAccess, isPermissionDenied } from '../access';
@@ -149,7 +149,7 @@ export default function NewSessionScreen({ route, navigation }) {
   const [newExerciseName, setNewExerciseName] = useState('');
   const [saving, setSaving] = useState(false);
   const [pastExercises, setPastExercises] = useState([]);
-  const [pastBest, setPastBest] = useState({}); // lowercase name -> { date, weight, reps, unit }
+  const [pastBest, setPastBest] = useState({}); // lowercase name -> { date, weight, reps, score, unit, sets }
   const [pastLast, setPastLast] = useState({}); // lowercase name -> { date, weight, reps, unit }
   const [suggestions, setSuggestions] = useState([]);
   const [tagMenu, setTagMenu] = useState(null); // { exIdx, setIdx }
@@ -289,7 +289,6 @@ export default function NewSessionScreen({ route, navigation }) {
       const names = new Set();
       const best = {};
       const last = {};
-      const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
 
       const sessions = snap.docs
         .map(d => {
@@ -303,7 +302,7 @@ export default function NewSessionScreen({ route, navigation }) {
       for (const s of sessions) {
         for (const ex of s.exercises) {
           names.add(ex.name);
-          const key = ex.name?.toLowerCase().trim();
+          const key = exerciseKey(ex.name);
           if (!key) continue;
 
           if (!last[key]) {
@@ -324,25 +323,35 @@ export default function NewSessionScreen({ route, navigation }) {
             }
           }
 
-          if (s.date.getTime() >= cutoff) {
-            let heaviest = null;
-            for (const set of (ex.sets || [])) {
-              const w = set.weight == null ? 0 : set.weight;
-              if (w <= 0) continue;
-              if (!heaviest || w > heaviest.weight) {
-                heaviest = { weight: w, reps: set.reps || 0 };
-              }
-            }
-            if (heaviest) {
-              const prev = best[key];
-              if (!prev || heaviest.weight > prev.weight) {
-                best[key] = {
-                  date: s.date,
-                  weight: heaviest.weight,
-                  reps: heaviest.reps,
-                  unit: ex.unit || 'reps',
-                };
-              }
+          // Best is all-time. Every session for this client is already in
+          // memory here, so an age cutoff would only throw away a real PR.
+          const unit = ex.unit || 'reps';
+          // Rank by estimated 1RM, the same basis compute1RMs uses when a
+          // session is saved — the heaviest set isn't always the best lift
+          // (95x5 estimates higher than 100x1). Timed exercises have no
+          // meaningful 1RM (their `reps` field holds seconds), so those
+          // still rank by weight.
+          const isSeconds = unit === 'seconds';
+          let top = null;
+          for (const set of (ex.sets || [])) {
+            const w = set.weight == null ? 0 : set.weight;
+            if (w <= 0) continue;
+            const reps = set.reps || 0;
+            const score = isSeconds ? w : estimate1RM(w, reps);
+            if (score <= 0) continue;
+            if (!top || score > top.score) top = { weight: w, reps, score };
+          }
+          if (top) {
+            const prev = best[key];
+            if (!prev || top.score > prev.score) {
+              best[key] = {
+                date: s.date,
+                weight: top.weight,
+                reps: top.reps,
+                score: top.score,
+                unit,
+                sets: ex.sets || [],
+              };
             }
           }
         }
@@ -737,7 +746,7 @@ export default function NewSessionScreen({ route, navigation }) {
               <Text style={styles.addSetText}>+ Add Set</Text>
             </TouchableOpacity>
             {(() => {
-              const k = ex.name?.toLowerCase().trim();
+              const k = exerciseKey(ex.name);
               const last = pastLast[k];
               const best = pastBest[k];
               if (!last && !best) return null;
@@ -753,7 +762,10 @@ export default function NewSessionScreen({ route, navigation }) {
               if (best) {
                 const isSeconds = best.unit === 'seconds';
                 const r = isSeconds ? `${best.reps} sec` : best.reps;
-                const oneRm = isSeconds ? null : Math.round(estimate1RM(best.weight, best.reps));
+                // `score` is the ranking value from loadPast — the estimated
+                // 1RM for rep-based work — so the chip and the popup caption
+                // can never disagree about which number won.
+                const oneRm = isSeconds ? null : Math.round(best.score);
                 bestStr = `Best ${best.weight}×${r}${oneRm ? `  ·  ${oneRm} 1RM` : ''}`;
               }
 
@@ -768,6 +780,7 @@ export default function NewSessionScreen({ route, navigation }) {
                         date: last.date,
                         sets: last.sets || [],
                         unit: last.unit,
+                        caption: 'Most recent',
                       })}
                     >
                       <Text style={styles.statLast} numberOfLines={1}>{lastStr}</Text>
@@ -776,7 +789,26 @@ export default function NewSessionScreen({ route, navigation }) {
                   ) : (
                     <View style={styles.statLastBtn} />
                   )}
-                  <Text style={styles.statBest} numberOfLines={1}>{bestStr}</Text>
+                  {best && (best.sets || []).length > 0 ? (
+                    <TouchableOpacity
+                      style={styles.statBestBtn}
+                      activeOpacity={0.6}
+                      onPress={() => setLastSetsModal({
+                        name: ex.name,
+                        date: best.date,
+                        sets: best.sets || [],
+                        unit: best.unit,
+                        caption: best.unit === 'seconds'
+                          ? 'Heaviest set'
+                          : `Best 1RM · ${Math.round(best.score)}`,
+                      })}
+                    >
+                      <Text style={styles.statBest} numberOfLines={1}>{bestStr}</Text>
+                      <Ionicons name="chevron-forward" size={12} color={COLORS.accent} />
+                    </TouchableOpacity>
+                  ) : (
+                    <Text style={styles.statBest} numberOfLines={1}>{bestStr}</Text>
+                  )}
                 </View>
               );
             })()}
@@ -1058,6 +1090,9 @@ export default function NewSessionScreen({ route, navigation }) {
                   {lastSetsModal.date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                 </Text>
               ) : null}
+              {lastSetsModal?.caption ? (
+                <Text style={styles.lastModalCaption}>{lastSetsModal.caption}</Text>
+              ) : null}
               <View style={styles.lastHeaderDivider} />
               {(lastSetsModal?.sets || []).map((set, i) => {
                 const isSeconds = lastSetsModal.unit === 'seconds';
@@ -1238,6 +1273,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 3,
   },
+  lastModalCaption: {
+    color: COLORS.accent,
+    fontSize: TYPE.label,
+    fontFamily: FONTS.semiBold,
+    textAlign: 'center',
+    marginTop: 2,
+  },
   lastHeaderDivider: {
     height: 2,
     backgroundColor: COLORS.accent,
@@ -1305,6 +1347,13 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: TYPE.body,
     fontFamily: FONTS.bold,
+  },
+  statBestBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 2,
   },
   statBest: {
     flex: 1,

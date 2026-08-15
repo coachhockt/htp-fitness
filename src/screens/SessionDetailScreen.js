@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc, updateDoc, addDoc, deleteDoc, Timestamp, collection, query, where, getDocs, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
-import { estimate1RM, compute1RMs, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
+import { estimate1RM, compute1RMs, exerciseKey, titleCaseExercise, genSupersetGroupId, getSupersetLabel, cleanupOrphanGroups, moveExerciseInList } from '../utils';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function SessionDetailScreen({ route, navigation }) {
@@ -117,7 +117,7 @@ export default function SessionDetailScreen({ route, navigation }) {
       for (const s of sessions) {
         for (const ex of s.exercises) {
           names.add(ex.name);
-          const key = ex.name?.toLowerCase().trim();
+          const key = exerciseKey(ex.name);
           if (!key || best[key]) continue;
           let heaviest = null;
           for (const set of (ex.sets || [])) {
@@ -705,7 +705,7 @@ export default function SessionDetailScreen({ route, navigation }) {
               <Text style={styles.addSetText}>+ Add Set</Text>
             </TouchableOpacity>
             {(() => {
-              const best = pastBest[ex.name?.toLowerCase().trim()];
+              const best = pastBest[exerciseKey(ex.name)];
               if (!best) return null;
               const wStr = best.weight == null || best.weight === 0 ? 'B.W.' : `${best.weight} lbs`;
               const rStr = best.unit === 'seconds' ? `${best.reps} sec` : best.reps;
