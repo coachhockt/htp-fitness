@@ -27,7 +27,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "coach.hockt@gmail.com"
+        "appleId": "coach.hockt@gmail.com",
+        "ascAppId": "6766768800",
+        "appleTeamId": "8FFV9N3YF8"
       }
     }
   }
