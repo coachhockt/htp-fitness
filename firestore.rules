@@ -62,8 +62,15 @@ service cloud.firestore {
           || isAdmin()
         );
 
-      // No one can delete user docs from client
-      allow delete: if false;
+      // A user may delete their own account doc. App Store guideline 5.1.1(v)
+      // requires in-app account deletion for any app offering account creation,
+      // and there is no Cloud Functions backend to do it server-side.
+      // The admin doc is exempt: deleting the trainer would orphan every client
+      // and session record, so the app hides the option for that account and
+      // the rule refuses it regardless.
+      allow delete: if isSignedIn()
+        && request.auth.uid == userId
+        && resource.data.get('role', 'user') != 'admin';
     }
 
     // ─── CLIENTS COLLECTION ───
@@ -113,7 +120,10 @@ service cloud.firestore {
       allow read, create, update: if isSignedIn()
         && request.auth.uid == userId
         && isActive();
-      allow delete: if false;
+      // Owner only, and deliberately without isActive(): this exists so account
+      // deletion can clear the schedule, and that runs while the account is
+      // being torn down.
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     // ─── SAVED WORKOUTS COLLECTION ───

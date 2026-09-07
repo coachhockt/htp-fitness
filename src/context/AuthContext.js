@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { db, app, FIREBASE_API_KEY } from '../../firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { withTimeout } from '../saveGuard';
 
@@ -242,6 +242,67 @@ export function AuthProvider({ children }) {
     await saveCredentials(user.email, newPassword);
   }
 
+  // Permanently delete the signed-in account. App Store guideline 5.1.1(v)
+  // requires this in-app for any app that offers account creation; deactivating
+  // instead of deleting is explicitly not accepted.
+  //
+  // Runs entirely client-side — there is no Cloud Functions backend — so the
+  // order is load-bearing. The delete rules on sessions and savedWorkouts call
+  // isActive(), which reads users/{uid}; dropping the user doc first would
+  // revoke the very permission needed to clear everything else. Owned documents
+  // go first, then the schedule, then the user doc, and the auth account last,
+  // since losing it ends Firestore access outright.
+  async function deleteAccount(password) {
+    const uid = user.uid;
+
+    // Re-authenticate: proves ownership and yields a fresh idToken, which
+    // Firebase requires for deletion. Same shape as changePassword.
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, password, returnSecureToken: true }),
+      }
+    );
+    const data = await res.json();
+    if (data.error) throw new Error('Incorrect password');
+
+    // Both collections key the owner as clientId, which for an app user is
+    // their own uid. A clients doc is the trainer's own record and carries an
+    // auto-generated id, so none is owned by the user being deleted.
+    for (const name of ['sessions', 'savedWorkouts']) {
+      const snap = await getDocs(query(collection(db, name), where('clientId', '==', uid)));
+      // writeBatch caps at 500 operations — chunk rather than assume a short
+      // training history.
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = writeBatch(db);
+        snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+        await withTimeout(batch.commit());
+      }
+    }
+
+    // schedules/{uid} may not exist; deleting a missing doc is a no-op.
+    await withTimeout(deleteDoc(doc(db, 'schedules', uid)));
+    await withTimeout(deleteDoc(doc(db, 'users', uid)));
+
+    const delRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: data.idToken }),
+      }
+    );
+    const delData = await delRes.json();
+    if (delData.error) throw new Error(delData.error.message.replace(/_/g, ' '));
+
+    // Tear down the local session exactly as logout does.
+    setUser(null);
+    await clearCredentials();
+    try { await signOut(getAuth()); } catch (e) {}
+  }
+
   async function logout() {
     setUser(null);
     await clearCredentials();
@@ -249,7 +310,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, isInactive, login, register, logout, saveProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, loading, isInactive, login, register, logout, saveProfile, changePassword, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   );

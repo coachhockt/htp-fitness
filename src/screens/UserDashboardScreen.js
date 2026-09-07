@@ -14,22 +14,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS, TYPE, RADIUS } from '../theme';
 import { getLastBodyEditDate, formatLastEdited } from '../utils';
 import { showNoAccess } from '../access';
-import { guardedSave } from '../saveGuard';
+import { guardedSave, isSaveTimeout } from '../saveGuard';
 import { isStepsAvailable, requestStepAccess, getTodaySteps, getWeeklySteps } from '../health';
 import ProfileMenu from '../components/ProfileMenu';
 import { SAMPLE_WORKOUTS } from '../sampleWorkouts';
 
 export default function UserDashboardScreen({ navigation }) {
-  const { user, isInactive, logout, saveProfile, changePassword } = useAuth();
+  const { user, isInactive, logout, saveProfile, changePassword, deleteAccount } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [schedule, setSchedule] = useState(null);
   const [profileModal, setProfileModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(false);
-  const [settingsView, setSettingsView] = useState('main'); // 'main' | 'password'
+  const [settingsView, setSettingsView] = useState('main'); // 'main' | 'password' | 'delete'
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
+  const [deletePw, setDeletePw] = useState('');
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [editFirst, setEditFirst] = useState('');
   const [editLast, setEditLast] = useState('');
@@ -52,15 +53,27 @@ export default function UserDashboardScreen({ navigation }) {
       collection(db, 'sessions'),
       where('clientId', '==', user.uid)
     );
-    return onSnapshot(q, (snap) => {
-      setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    return onSnapshot(
+      q,
+      (snap) => {
+        setSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      },
+      // Account deletion removes users/{uid} while this screen is still
+      // mounted, which fails the isActive() check these reads depend on. The
+      // screen is about to unmount anyway, so swallow it rather than surface a
+      // permission error on the way out.
+      () => {}
+    );
   }, []);
 
   useEffect(() => {
-    return onSnapshot(doc(db, 'schedules', user.uid), (snap) => {
-      if (snap.exists()) setSchedule(snap.data());
-    });
+    return onSnapshot(
+      doc(db, 'schedules', user.uid),
+      (snap) => {
+        if (snap.exists()) setSchedule(snap.data());
+      },
+      () => {}
+    );
   }, [user.uid]);
 
   // Step tracking (Apple Health / Health Connect) — display only, never written back.
@@ -255,6 +268,7 @@ export default function UserDashboardScreen({ navigation }) {
     setCurrentPw('');
     setNewPw('');
     setConfirmPw('');
+    setDeletePw('');
     setSettingsModal(true);
   }
 
@@ -321,6 +335,37 @@ export default function UserDashboardScreen({ navigation }) {
     } finally {
       setSettingsSaving(false);
     }
+  }
+
+  function handleDeleteAccount() {
+    if (!deletePw) { Alert.alert('Error', 'Enter your password to confirm'); return; }
+    Alert.alert(
+      'Delete Account',
+      'This permanently deletes your account, your profile, and every session and saved workout tied to it.\n\nThis cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setSettingsSaving(true);
+            try {
+              await deleteAccount(deletePw);
+              // No success alert: the account is gone, so the navigator drops
+              // back to the auth stack and this screen unmounts underneath it.
+            } catch (e) {
+              Alert.alert(
+                'Not Deleted',
+                isSaveTimeout(e)
+                  ? "Couldn't reach the server, so your account was not deleted. Check your connection and try again."
+                  : e.message
+              );
+              setSettingsSaving(false);
+            }
+          },
+        },
+      ]
+    );
   }
 
   async function handleSaveProfile() {
@@ -765,7 +810,11 @@ export default function UserDashboardScreen({ navigation }) {
             <View>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {settingsView === 'main' ? 'Settings' : 'Change Password'}
+                {settingsView === 'main'
+                  ? 'Settings'
+                  : settingsView === 'password'
+                    ? 'Change Password'
+                    : 'Delete Account'}
               </Text>
               <TouchableOpacity onPress={() => setSettingsModal(false)} style={styles.closeBtn}>
                 <Text style={styles.closeBtnText}>✕</Text>
@@ -795,6 +844,43 @@ export default function UserDashboardScreen({ navigation }) {
                       : `Connect ${Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect'}`}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                </TouchableOpacity>
+                {/* Hidden for the trainer: deleting the admin account would
+                    orphan every client and session record. */}
+                {user.role !== 'admin' && (
+                  <TouchableOpacity style={styles.settingsBtn} onPress={() => setSettingsView('delete')}>
+                    <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                    <Text style={[styles.settingsBtnText, { color: COLORS.danger }]}>Delete Account</Text>
+                    <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : settingsView === 'delete' ? (
+              <>
+                <Text style={styles.deleteWarning}>
+                  Deleting your account permanently removes your profile, your training
+                  sessions, and your saved workouts. This cannot be undone.
+                </Text>
+                <Text style={styles.fieldLabel}>Password</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your password to confirm"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={deletePw}
+                  onChangeText={setDeletePw}
+                  secureTextEntry
+                />
+                <TouchableOpacity
+                  style={[styles.deleteBtn, settingsSaving && { opacity: 0.5 }]}
+                  onPress={handleDeleteAccount}
+                  disabled={settingsSaving}
+                >
+                  <Text style={styles.deleteBtnText}>
+                    {settingsSaving ? 'Deleting...' : 'Delete My Account'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.settingsBack} onPress={() => setSettingsView('main')}>
+                  <Text style={styles.settingsBackText}>Back</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -1240,4 +1326,21 @@ const styles = StyleSheet.create({
   settingsBtnText: { flex: 1, color: COLORS.textBright, fontSize: TYPE.body, fontFamily: FONTS.semiBold },
   settingsBack: { alignItems: 'center', padding: 12, marginTop: 4 },
   settingsBackText: { color: COLORS.textMuted, fontSize: TYPE.label, fontFamily: FONTS.regular },
+
+  // Delete account
+  deleteWarning: {
+    color: COLORS.text,
+    fontSize: TYPE.label,
+    fontFamily: FONTS.regular,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  deleteBtn: {
+    backgroundColor: COLORS.danger,
+    borderRadius: RADIUS.sm,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  deleteBtnText: { color: '#FFF', fontWeight: '800', fontSize: TYPE.body, fontFamily: FONTS.extraBold },
 });
