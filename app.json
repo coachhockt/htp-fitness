@@ -3,7 +3,7 @@
     "name": "HTP Fitness",
     "slug": "htp-fitness",
     "scheme": "htp-fitness",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -13,12 +13,6 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.htp.fitness",
@@ -44,18 +38,29 @@
       "expo-secure-store",
       "expo-notifications",
       [
-        "react-native-health",
+        "@kingstinct/react-native-healthkit",
         {
-          "healthSharePermission": "HTP Fitness reads your step count to show your activity."
+          "NSHealthShareUsageDescription": "HTP Fitness reads your step count to show your activity.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
         }
       ],
-      "expo-health-connect",
+      "react-native-health-connect",
       [
         "expo-build-properties",
         {
           "android": {
             "minSdkVersion": 26
           }
+        }
+      ],
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
         }
       ]
     ],

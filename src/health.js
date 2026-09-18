@@ -7,13 +7,15 @@
 import { Platform } from 'react-native';
 
 // Native modules are required lazily so a missing/native-only module never crashes the bundle.
-let _hk = null; // react-native-health (iOS)
+let _hk = null; // @kingstinct/react-native-healthkit (iOS)
 let _hc = null; // react-native-health-connect (Android)
+
+// HealthKit identifiers are plain strings in this library (no Constants enum).
+const STEP_COUNT = 'HKQuantityTypeIdentifierStepCount';
 
 function getHealthKit() {
   if (_hk === null) {
-    // react-native-health uses `module.exports = HealthKit` (no `.default`).
-    try { const m = require('react-native-health'); _hk = m.default || m || false; }
+    try { const m = require('@kingstinct/react-native-healthkit'); _hk = m || false; }
     catch (e) { _hk = false; }
   }
   return _hk || null;
@@ -44,29 +46,15 @@ function startOfWeek() {
 
 // --- iOS (HealthKit) ---
 
-function hkPermissions(HK) {
-  return { permissions: { read: [HK.Constants.Permissions.Steps], write: [] } };
-}
-
-function hkInit(HK) {
-  return new Promise((resolve) => {
-    HK.initHealthKit(hkPermissions(HK), (err) => {
-      resolve({ ok: !err, error: err ? (typeof err === 'string' ? err : JSON.stringify(err)) : null });
-    });
+// One cumulative-sum statistics query replaces the old per-day sample fetch: HealthKit
+// aggregates server-side, so there are no buckets to sum here. Dates go in as Date
+// objects (the previous library wanted ISO strings).
+async function hkStepsBetween(HK, start, end) {
+  const res = await HK.queryStatisticsForQuantity(STEP_COUNT, ['cumulativeSum'], {
+    filter: { date: { startDate: start, endDate: end } },
+    unit: 'count',
   });
-}
-
-function hkStepsBetween(HK, start, end) {
-  // getDailyStepCountSamples returns one bucket per day; sum the values.
-  return new Promise((resolve) => {
-    HK.getDailyStepCountSamples(
-      { startDate: start.toISOString(), endDate: end.toISOString() },
-      (err, results) => {
-        if (err || !Array.isArray(results)) { resolve(0); return; }
-        resolve(Math.round(results.reduce((sum, r) => sum + (r.value || 0), 0)));
-      }
-    );
-  });
+  return Math.round(res?.sumQuantity?.quantity || 0);
 }
 
 // --- Android (Health Connect) ---
@@ -89,10 +77,8 @@ export async function isStepsAvailable() {
   try {
     if (Platform.OS === 'ios') {
       const HK = getHealthKit();
-      if (!HK) return false;
-      return new Promise((resolve) => {
-        HK.isAvailable((err, available) => resolve(!err && !!available));
-      });
+      if (!HK || typeof HK.isHealthDataAvailableAsync !== 'function') return false;
+      return !!(await HK.isHealthDataAvailableAsync());
     }
     if (Platform.OS === 'android') {
       const HC = getHealthConnect();
@@ -112,15 +98,15 @@ export async function requestStepAccess() {
   try {
     if (Platform.OS === 'ios') {
       const HK = getHealthKit();
-      if (!HK) return { ok: false, error: 'react-native-health module not found (require failed)' };
-      if (typeof HK.initHealthKit !== 'function') {
-        // Object exists (Constants present) but native methods are missing — the native
-        // module didn't register, typically the New Architecture not loading an old module.
-        return { ok: false, error: 'native HealthKit module not registered (initHealthKit missing — likely New Architecture)' };
+      if (!HK) return { ok: false, error: '@kingstinct/react-native-healthkit module not found (require failed)' };
+      if (typeof HK.requestAuthorization !== 'function') {
+        // Module resolved but its native side is absent — the Nitro module didn't register.
+        return { ok: false, error: 'native HealthKit module not registered (requestAuthorization missing)' };
       }
       // Note: HealthKit never reveals whether READ access was denied (privacy), so a
-      // successful init means "ready to try reading", not a guaranteed grant.
-      return await hkInit(HK);
+      // successful request means "ready to try reading", not a guaranteed grant.
+      const ok = await HK.requestAuthorization({ toRead: [STEP_COUNT] });
+      return { ok: !!ok, error: ok ? null : 'authorization request was not granted' };
     }
     if (Platform.OS === 'android') {
       const HC = getHealthConnect();
