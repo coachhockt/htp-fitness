@@ -4,7 +4,7 @@
 // degrade gracefully when health data is unavailable (simulator, permission denied, or
 // Health Connect not installed).
 
-import { Platform } from 'react-native';
+import { Platform, TurboModuleRegistry } from 'react-native';
 
 // Native modules are required lazily so a missing/native-only module never crashes the bundle.
 let _hk = null; // @kingstinct/react-native-healthkit (iOS)
@@ -15,6 +15,10 @@ const STEP_COUNT = 'HKQuantityTypeIdentifierStepCount';
 
 function getHealthKit() {
   if (_hk === null) {
+    // The library builds its Nitro HybridObjects at import time, so a missing native side
+    // throws from inside the require rather than on first call. Expo Go has no Nitro at all.
+    // Probe with the non-throwing registry lookup so that import never runs there.
+    if (!TurboModuleRegistry.get('NitroModules')) { _hk = false; return null; }
     try { const m = require('@kingstinct/react-native-healthkit'); _hk = m || false; }
     catch (e) { _hk = false; }
   }
