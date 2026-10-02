@@ -193,28 +193,27 @@ export default function AssignWorkoutScreen({ route, navigation }) {
             }
           }
 
-          // All-time, ranked by estimated 1RM — same basis as the Best chip on
-          // the current-session screen, so one lift can't show two different
-          // "Best" values depending on which screen you're looking at.
+          // All-time, ranked by heaviest weight lifted — same basis as the Best
+          // chip on the current-session screen, so one lift can't show two
+          // different "Best" values depending on which screen you're looking at.
+          // Ties break toward more reps at that weight.
           const unit = ex.unit || 'reps';
-          const isSeconds = unit === 'seconds';
           let top = null;
           for (const set of (ex.sets || [])) {
             const w = set.weight == null ? 0 : set.weight;
             if (w <= 0) continue;
             const reps = set.reps || 0;
-            const score = isSeconds ? w : estimate1RM(w, reps);
-            if (score <= 0) continue;
-            if (!top || score > top.score) top = { weight: w, reps, score };
+            if (!top || w > top.weight || (w === top.weight && reps > top.reps)) {
+              top = { weight: w, reps };
+            }
           }
           if (top) {
             const prev = best[key];
-            if (!prev || top.score > prev.score) {
+            if (!prev || top.weight > prev.weight || (top.weight === prev.weight && top.reps > prev.reps)) {
               best[key] = {
                 date: s.date,
                 weight: top.weight,
                 reps: top.reps,
-                score: top.score,
                 unit,
               };
             }
@@ -575,7 +574,9 @@ export default function AssignWorkoutScreen({ route, navigation }) {
               if (best) {
                 const isSeconds = best.unit === 'seconds';
                 const r = isSeconds ? `${best.reps} sec` : best.reps;
-                const oneRm = isSeconds ? null : Math.round(best.score);
+                // Informational only — ranking is by weight. Derived from the winning
+                // set so it can't disagree with the weight×reps beside it.
+                const oneRm = isSeconds ? null : estimate1RM(best.weight, best.reps);
                 bestStr = `Best ${best.weight}×${r}${oneRm ? `  ·  ${oneRm} 1RM` : ''}`;
               }
 

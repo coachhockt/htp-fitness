@@ -149,7 +149,7 @@ export default function NewSessionScreen({ route, navigation }) {
   const [newExerciseName, setNewExerciseName] = useState('');
   const [saving, setSaving] = useState(false);
   const [pastExercises, setPastExercises] = useState([]);
-  const [pastBest, setPastBest] = useState({}); // lowercase name -> { date, weight, reps, score, unit, sets }
+  const [pastBest, setPastBest] = useState({}); // lowercase name -> { date, weight, reps, unit, sets }
   const [pastLast, setPastLast] = useState({}); // lowercase name -> { date, weight, reps, unit }
   const [suggestions, setSuggestions] = useState([]);
   const [tagMenu, setTagMenu] = useState(null); // { exIdx, setIdx }
@@ -326,29 +326,27 @@ export default function NewSessionScreen({ route, navigation }) {
           // Best is all-time. Every session for this client is already in
           // memory here, so an age cutoff would only throw away a real PR.
           const unit = ex.unit || 'reps';
-          // Rank by estimated 1RM, the same basis compute1RMs uses when a
-          // session is saved — the heaviest set isn't always the best lift
-          // (95x5 estimates higher than 100x1). Timed exercises have no
-          // meaningful 1RM (their `reps` field holds seconds), so those
-          // still rank by weight.
-          const isSeconds = unit === 'seconds';
+          // Rank by the heaviest weight actually lifted. Ties go to the set with
+          // more reps at that weight (100x5 beats 100x1); a dead tie keeps the
+          // first one seen, and sessions are newest-first, so that's the most
+          // recent time they hit it. For timed work `reps` holds seconds, so the
+          // same tie-break reads as the longer hold at that weight.
           let top = null;
           for (const set of (ex.sets || [])) {
             const w = set.weight == null ? 0 : set.weight;
             if (w <= 0) continue;
             const reps = set.reps || 0;
-            const score = isSeconds ? w : estimate1RM(w, reps);
-            if (score <= 0) continue;
-            if (!top || score > top.score) top = { weight: w, reps, score };
+            if (!top || w > top.weight || (w === top.weight && reps > top.reps)) {
+              top = { weight: w, reps };
+            }
           }
           if (top) {
             const prev = best[key];
-            if (!prev || top.score > prev.score) {
+            if (!prev || top.weight > prev.weight || (top.weight === prev.weight && top.reps > prev.reps)) {
               best[key] = {
                 date: s.date,
                 weight: top.weight,
                 reps: top.reps,
-                score: top.score,
                 unit,
                 sets: ex.sets || [],
               };
@@ -759,14 +757,16 @@ export default function NewSessionScreen({ route, navigation }) {
                 lastStr = `Last ${w}×${r} · ${d}`;
               }
               let bestStr = '';
+              let bestOneRm = null;
               if (best) {
                 const isSeconds = best.unit === 'seconds';
                 const r = isSeconds ? `${best.reps} sec` : best.reps;
-                // `score` is the ranking value from loadPast — the estimated
-                // 1RM for rep-based work — so the chip and the popup caption
-                // can never disagree about which number won.
-                const oneRm = isSeconds ? null : Math.round(best.score);
-                bestStr = `Best ${best.weight}×${r}${oneRm ? `  ·  ${oneRm} 1RM` : ''}`;
+                // Derived from the winning set instead of stored, so the 1RM can never
+                // disagree with the weight×reps shown next to it. It's informational
+                // only — ranking is by weight. Timed work has no meaningful 1RM, since
+                // its `reps` field holds seconds.
+                bestOneRm = isSeconds ? null : estimate1RM(best.weight, best.reps);
+                bestStr = `Best ${best.weight}×${r}${bestOneRm ? `  ·  ${bestOneRm} 1RM` : ''}`;
               }
 
               return (
@@ -798,9 +798,7 @@ export default function NewSessionScreen({ route, navigation }) {
                         date: best.date,
                         sets: best.sets || [],
                         unit: best.unit,
-                        caption: best.unit === 'seconds'
-                          ? 'Heaviest set'
-                          : `Best 1RM · ${Math.round(best.score)}`,
+                        caption: bestOneRm ? `Heaviest set · ${bestOneRm} 1RM` : 'Heaviest set',
                       })}
                     >
                       <Text style={styles.statBest} numberOfLines={1}>{bestStr}</Text>
